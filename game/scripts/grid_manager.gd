@@ -93,7 +93,7 @@ func spawn_row(round_number: int) -> void:
 			open.remove_at(pick)
 
 	for i in range(count):
-		_place_block(stacks[i] * unit_value, columns[i], 0)
+		_place_block(stacks[i] * unit_value, columns[i], rules.spawn_row_index)
 
 	_maybe_place_pickup()
 
@@ -109,19 +109,20 @@ func _place_block(value: int, col: int, row: int) -> Block:
 func _maybe_place_pickup() -> void:
 	if randf() > rules.pickup_chance:
 		return
+	var row := rules.spawn_row_index
 	var empty: Array[int] = []
 	for col in range(rules.grid_width):
-		if cells[0][col] == null:
+		if cells[row][col] == null:
 			empty.append(col)
 	if empty.is_empty():
 		return
 	var col: int = empty[randi_range(0, empty.size() - 1)]
 	var pickup: BallPickup = PickupScene.instantiate()
 	add_child(pickup)
-	pickup.position = cell_center(col, 0)
-	pickup.setup(cell_size, col, 0)
+	pickup.position = cell_center(col, row)
+	pickup.setup(cell_size, col, row)
 	pickup.collected.connect(_on_pickup_collected)
-	cells[0][col] = pickup
+	cells[row][col] = pickup
 
 
 # ------------------------------------------------------------------ shifting
@@ -160,6 +161,16 @@ func advance() -> bool:
 
 ## Debug helper: pull the field back up one row.
 func shift_up() -> void:
+	# Row 0 is about to be overwritten by row 1's occupant below. Under the
+	# normal round loop it is always empty by the time this runs, but a
+	# second consecutive shift_up (debug holding Shift+Up) would otherwise
+	# silently orphan whatever this call just moved into it -- free it first.
+	for col in range(rules.grid_width):
+		var stale = cells[0][col]
+		if is_instance_valid(stale):
+			stale.queue_free()
+		cells[0][col] = null
+
 	for row in range(1, rules.grid_height):
 		for col in range(rules.grid_width):
 			var n = cells[row][col]
@@ -177,6 +188,41 @@ func _slide(node: Node2D, col: int, row: int) -> void:
 	var tween := create_tween()
 	tween.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 	tween.tween_property(node, "position", cell_center(col, row), 0.22)
+
+
+# --------------------------------------------------------------- debug tools
+
+## Destroys every Block in `row`, through `Block.hit()` so the usual
+## destroyed signal / cell cleanup still runs. Debug-only: a real ball never
+## clears more than the one block it hits.
+func clear_row(row: int) -> void:
+	if not in_bounds(0, row):
+		return
+	for col in range(rules.grid_width):
+		var occ = cells[row][col]
+		if occ is Block:
+			occ.hit(occ.value)
+
+func clear_all() -> void:
+	for row in range(rules.grid_height):
+		clear_row(row)
+
+## World point -> cell, or (-1, -1) if it lands outside the grid.
+func cell_at(point: Vector2) -> Vector2i:
+	var local := point - origin
+	var col := int(floor(local.x / cell_size))
+	var row := int(floor(local.y / cell_size))
+	if in_bounds(col, row):
+		return Vector2i(col, row)
+	return Vector2i(-1, -1)
+
+## The Block at a world point, or null if there is none there.
+func block_at(point: Vector2) -> Block:
+	var c := cell_at(point)
+	if c.x < 0:
+		return null
+	var occ = cells[c.y][c.x]
+	return occ as Block
 
 
 # ------------------------------------------------------------------- signals

@@ -39,6 +39,9 @@ const _Loss := preload("res://scripts/config/loss.gd")
 @export var floor_y: float = _Board.FLOOR_Y
 ## How far above the floor the shooter sits.
 @export var shooter_height: float = _Board.SHOOTER_HEIGHT
+## Which row `GridManager.spawn_row` targets. Debug-menu adjustable; see
+## `scripts/config/board.gd` for why 0 is the sane default.
+@export var spawn_row_index: int = _Board.SPAWN_ROW_INDEX
 
 # --------------------------------------------------------------- row spawning
 @export_group("Row spawning")

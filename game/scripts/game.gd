@@ -8,6 +8,7 @@ extends Node2D
 enum State { AIMING, FIRING, RESOLVING, GAME_OVER }
 
 const BallScene := preload("res://scenes/ball.tscn")
+const DEBUG_MOVE_SPEED := 700.0 ## px/sec for the debug left/right launch-position nudge.
 
 ## Drop a .tres here to run the game under different rules. Empty = defaults.
 @export var rules: GameRules
@@ -17,6 +18,8 @@ const BallScene := preload("res://scenes/ball.tscn")
 @onready var balls_root: Node2D = $Balls
 @onready var walls_root: Node2D = $Walls
 @onready var hud: HUD = $HUD
+@onready var pause_menu: PauseMenu = $PauseMenu
+@onready var debug_overlay: DebugOverlay = $DebugOverlay
 
 var state: State = State.AIMING
 var round_number: int = 1
@@ -24,6 +27,12 @@ var ball_count: int = 1
 var pending_balls: int = 0
 var round_damage: int = 0
 var total_damage: int = 0
+
+## Debug-only bookkeeping. See scripts/debug_state.gd and the debug section
+## below for what reads/writes these.
+var debug_row_credit: int = 0
+var expected_ball_count: int = 1
+var expected_round_number: int = 1
 
 var _to_fire: int = 0
 var _fire_cd: float = 0.0
@@ -34,6 +43,7 @@ var _fire_origin := Vector2.ZERO
 var _play_left: float = 0.0
 var _play_right: float = 0.0
 var _dragging: bool = false
+var _debug_touches: Dictionary = {} ## touch index -> screen position, for the two-finger-tap destroy gesture.
 
 
 func _ready() -> void:
@@ -41,6 +51,18 @@ func _ready() -> void:
 	if rules == null:
 		rules = GameRules.new()
 
+	grid.pickup_collected.connect(_on_pickup_collected)
+	pause_menu.grid_apply_requested.connect(_on_debug_grid_apply)
+
+	_layout_playfield()
+	_prime_board()
+	_refresh_hud()
+	queue_redraw()
+
+## Sizes cells, rebuilds the walls, and repositions the shooter from `rules`.
+## Split out of `_ready` so the debug menu's grid-size apply can re-run it
+## without duplicating the math.
+func _layout_playfield() -> void:
 	var vp := Vector2(
 		float(ProjectSettings.get_setting("display/window/size/viewport_width")),
 		float(ProjectSettings.get_setting("display/window/size/viewport_height"))
@@ -58,16 +80,20 @@ func _ready() -> void:
 	var grid_w := cell * float(rules.grid_width)
 	var org := Vector2((vp.x - grid_w) * 0.5, rules.grid_top)
 	grid.configure(rules, cell, org)
-	grid.pickup_collected.connect(_on_pickup_collected)
 
 	_build_walls(vp)
 
 	shooter.setup(rules)
 	shooter.position = Vector2(vp.x * 0.5, rules.floor_y - rules.shooter_height)
-
-	grid.spawn_row(round_number)
-	_refresh_hud()
 	queue_redraw()
+
+## Spawn round 1's row into row 0, then shift it into row 1 immediately -- the
+## same spawn-then-shift sequence _end_round uses -- so row 0 reads as clear
+## from the very first frame, not just after the first round ends. Re-run
+## after a debug grid-size apply too, since that clears the whole board.
+func _prime_board() -> void:
+	grid.spawn_row(round_number)
+	grid.advance()
 
 
 ## Solid rectangles rather than WorldBoundaryShape2D: a fast ball that clips a
@@ -105,6 +131,12 @@ func _process(delta: float) -> void:
 	if Input.is_action_just_pressed("restart"):
 		get_tree().reload_current_scene()
 		return
+	if Input.is_action_just_pressed("pause"):
+		pause_menu.open()
+		return
+
+	if Debug.enabled:
+		_tick_debug_input(delta)
 
 	match state:
 		State.AIMING:
@@ -113,16 +145,24 @@ func _process(delta: float) -> void:
 				shooter.nudge(axis * rules.aim_speed_degrees * delta)
 			if Input.is_action_just_pressed("fire"):
 				_begin_firing()
-			elif Input.is_action_just_pressed("debug_shift_down"):
-				_debug_advance()
-			elif Input.is_action_just_pressed("debug_shift_up"):
-				grid.shift_up()
 		State.FIRING:
 			_tick_firing(delta)
 
 ## Press-and-drag aiming. The full drag/line treatment is a later build step;
 ## this is enough to make the game testable with a mouse or a thumb.
 func _unhandled_input(event: InputEvent) -> void:
+	if Debug.enabled and event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			var point := get_global_mouse_position()
+			if grid.block_at(point) != null:
+				var destroy := Input.is_action_pressed("debug_shift_hold")
+				debug_damage_at(point, destroy)
+				return
+
+	if Debug.enabled and event is InputEventScreenTouch:
+		_handle_debug_touch(event as InputEventScreenTouch)
+
 	if state != State.AIMING:
 		return
 	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
@@ -199,25 +239,33 @@ func _end_round() -> void:
 		shooter.position.x = _landing_x
 
 	ball_count += pending_balls
+	expected_ball_count += pending_balls
+	expected_round_number += 1
 	pending_balls = 0
 
-	if grid.advance():
-		_game_over()
-		return
+	if debug_row_credit > 0:
+		# Spend banked debug slack (see debug_shift_rows): shift only, no new
+		# row, no round_number bump, until the credit runs out.
+		debug_row_credit -= 1
+		if grid.advance():
+			_game_over()
+			return
+	else:
+		# Spawn the next round's row into row 0 (still clear from last time)
+		# and THEN shift -- not the other way around. advance() carries the
+		# fresh spawn down into row 1 along with everything else, so row 0
+		# reads as clear again once this settles. round_number only advances
+		# on survival, so a loss is still reported against the round that was
+		# just played.
+		grid.spawn_row(round_number + 1)
+		if grid.advance():
+			_game_over()
+			return
+		round_number += 1
 
-	round_number += 1
-	grid.spawn_row(round_number)
 	shooter.active = true
 	shooter.queue_redraw()
 	state = State.AIMING
-	_refresh_hud()
-
-func _debug_advance() -> void:
-	if grid.advance():
-		_game_over()
-		return
-	round_number += 1
-	grid.spawn_row(round_number)
 	_refresh_hud()
 
 func _game_over() -> void:
@@ -230,6 +278,121 @@ func _game_over() -> void:
 
 func _refresh_hud() -> void:
 	hud.refresh(round_number, ball_count, pending_balls, round_damage, total_damage)
+	debug_overlay.refresh_readouts()
+
+
+# --------------------------------------------------------------- debug tools
+# All gated behind Debug.enabled by the callers above (_process, _unhandled_
+# input) -- these methods themselves don't re-check it, since the debug menu
+# and overlay only exist to call them while it's on. Both the keyboard
+# (arrows + Shift) and the on-screen D-pad drive these through the SAME named
+# input actions (the overlay presses debug_up/down/left/right with
+# Input.action_press), so there is exactly one place that interprets them.
+
+func _on_debug_grid_apply(width: int, height: int, kill_row: int, spawn_row: int) -> void:
+	rules.grid_width = maxi(1, width)
+	rules.grid_height = maxi(2, height)
+	rules.death_row_override = clampi(kill_row, 0, rules.grid_height - 1)
+	rules.spawn_row_index = clampi(spawn_row, 0, rules.grid_height - 1)
+	round_number = 1
+	ball_count = 1
+	expected_ball_count = 1
+	expected_round_number = 1
+	debug_row_credit = 0
+	_layout_playfield()
+	_prime_board()
+	debug_overlay.refresh_row_buttons()
+	_refresh_hud()
+
+func _tick_debug_input(delta: float) -> void:
+	var shift_held := Input.is_action_pressed("debug_shift_hold") or debug_overlay.touch_shift_toggled
+
+	if Input.is_action_just_pressed("debug_up"):
+		if shift_held:
+			debug_shift_rows(1)
+		else:
+			debug_ball_count_delta(1)
+	if Input.is_action_just_pressed("debug_down"):
+		if shift_held:
+			debug_shift_rows(-1)
+		else:
+			debug_ball_count_delta(-1)
+
+	if shift_held:
+		if Input.is_action_just_pressed("debug_left"):
+			debug_round_delta(-1)
+		if Input.is_action_just_pressed("debug_right"):
+			debug_round_delta(1)
+	else:
+		var move := Input.get_axis("debug_left", "debug_right")
+		if not is_zero_approx(move):
+			debug_move_launch(move * DEBUG_MOVE_SPEED * delta)
+
+	debug_overlay.refresh_readouts()
+
+func debug_ball_count_delta(delta: int) -> void:
+	ball_count = maxi(1, ball_count + delta)
+	_refresh_hud()
+
+func debug_round_delta(delta: int) -> void:
+	round_number = maxi(1, round_number + delta)
+	_refresh_hud()
+
+## Shift the whole field up one row and bank a credit: the next `abs(delta)`
+## real round-completions shift down without spawning a new row or advancing
+## round_number, since an up-shift manufactures slack that normal play did
+## not earn. A down-shift is a real shift too -- it can end the run exactly
+## like a normal round's shift can.
+func debug_shift_rows(delta: int) -> void:
+	if delta > 0:
+		grid.shift_up()
+		debug_row_credit += 1
+	elif delta < 0:
+		if grid.advance():
+			_game_over()
+			return
+		debug_row_credit = maxi(0, debug_row_credit - 1)
+	_refresh_hud()
+
+func debug_clear_row(row: int) -> void:
+	grid.clear_row(row)
+
+func debug_clear_all() -> void:
+	grid.clear_all()
+
+## While held, nudges the shooter (and any live balls) sideways without
+## touching aim -- a debug-only way to reposition without waiting for a
+## fresh round.
+func debug_move_launch(delta_x: float) -> void:
+	shooter.position.x = clampf(shooter.position.x + delta_x, _play_left, _play_right)
+	for ball: Node in balls_root.get_children():
+		if ball is Ball:
+			(ball as Ball).global_position.x = clampf(
+				(ball as Ball).global_position.x + delta_x,
+				_play_left + rules.ball_radius,
+				_play_right - rules.ball_radius
+			)
+
+## 1 damage, or a full-value destroy. Called from _unhandled_input when
+## Debug.enabled and the click/tap lands on a Block.
+func debug_damage_at(point: Vector2, destroy: bool) -> void:
+	var block := grid.block_at(point)
+	if block == null:
+		return
+	block.hit(block.value if destroy else 1)
+
+## Best-effort two-finger tap: NOT verified on real touch hardware (no
+## touch/Android build exists yet, docs/ROADMAP.md). A second concurrent
+## touch that lands on a block destroys it outright, mirroring Shift+Click.
+func _handle_debug_touch(t: InputEventScreenTouch) -> void:
+	if t.pressed:
+		_debug_touches[t.index] = t.position
+		if _debug_touches.size() >= 2:
+			var world := get_canvas_transform().affine_inverse() * t.position
+			if grid.block_at(world) != null:
+				debug_damage_at(world, true)
+	else:
+		_debug_touches.erase(t.index)
 
 
 # --------------------------------------------------------------- playfield fx

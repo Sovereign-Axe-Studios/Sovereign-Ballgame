@@ -35,12 +35,21 @@ FIRING      Game._tick_firing spawns one ball every ball_fire_interval until
 RESOLVING   when the last ball is down:
               1. shooter slides to where the FIRST ball landed
               2. banked +1 ball pickups are added to ball_count
-              3. GridManager.advance() shifts every occupant down one row
-              4. a Block landing in death_row() -> GAME_OVER
-              5. round_number += 1, GridManager.spawn_row(round_number)
+              3. GridManager.spawn_row(round_number + 1) into row 0, which is
+                 clear at this point
+              4. GridManager.advance() shifts every occupant (including that
+                 fresh row) down one row -- row 0 is clear again once this
+                 settles
+              5. a Block landing in death_row() -> GAME_OVER, round_number
+                 NOT incremented (it still names the round that was lost)
+              6. otherwise round_number += 1
    |
 AIMING      ...
 ```
+
+Spawn happens BEFORE the shift, not after -- row 0 is meant to read as clear
+at every AIMING, the same as it does before round 1. `Game._ready` primes this
+by calling `spawn_row` then `advance()` once before the first aim.
 
 `Game.state` is the enum driving this. `_on_ball_finished` is the only thing
 that can end a round, and it does so on `_to_fire <= 0 and _live_balls <= 0`.
@@ -62,6 +71,9 @@ that can end a round, and it does so on `_to_fire <= 0 and _live_balls <= 0`.
 | `scripts/shooter.gd` | `Shooter` — the aim line | 0 deg is straight up, positive is to the right |
 | `scripts/hud.gd` | `HUD` — four counters + game over | Labels live in `main.tscn` under `HUD/Root` |
 | `scripts/palette.gd` | Shared colours, ROYGBIV health ramp | `Palette.health_color(value, max_value = 100)` |
+| `scripts/debug_state.gd` | `Debug` autoload — the debug-mode flag | Session-only; survives a scene reload on purpose. See §9. |
+| `scripts/ui/pause_menu.gd` | `PauseMenu` — debug toggle, grid tuning, mod/save stubs, restart | Built in code, not `.tscn`; `process_mode = ALWAYS` so it works while paused |
+| `scripts/ui/debug_overlay.gd` | `DebugOverlay` — row-clear buttons, hold-to-clear-all, on-screen D-pad, expected-count readouts | Visible only while `Debug.enabled`. See §9. |
 
 Scenes are deliberately thin. `main.tscn` is `Main` (Game) with five children:
 `Walls`, `Grid`, `Balls`, `Shooter`, `HUD`. `ball/block/pickup.tscn` each carry a
@@ -101,12 +113,18 @@ nodes.
 ### The grid
 
 `cells` is `grid_height` rows of `grid_width` entries, row 0 at the top.
+Default shape (matching the reference game) is 7 wide, 9 tall.
 
-- **Row 0** is the spawn row. A new row appears here every round.
+- **Row 0 is always clear.** `spawn_row` writes the new row there, but
+  `Game._end_round` calls it BEFORE `advance()`, so the fresh row is
+  immediately carried down to row 1 by the same shift. Row 0 reads as empty at
+  every AIMING, including before round 1 (`Game._ready` does the same
+  spawn-then-advance once).
 - **`rules.death_row()`** (default `grid_height - 1`, the bottom row) ends the
   run. It is drawn with a red tint and a red line so it reads in play.
 - The shooter sits *below* the grid, near `floor_y`, not in a grid cell.
-- A block therefore survives 6 shifts on a 7-row board before it kills you.
+- A block therefore survives 7 shifts on the default 9-row board (landing in
+  row 1 after its spawning round, then rows 2 through 8) before it kills you.
 
 `advance()` walks bottom-up moving `cells[row-1]` into `cells[row]`, tweens each
 node to its new `cell_center`, frees pickups that reach the death row, and
@@ -151,11 +169,16 @@ The ball never collides with pickups; the pickup's Area2D detects the ball.
 
 ### Input actions
 
-Defined in `project.godot`, not read raw: `aim_left` (Left / A), `aim_right`
-(Right / D), `fire` (Space), `debug_shift_down` (Down), `debug_shift_up` (Up),
-`restart` (R). Mouse press-drag-release also aims and fires, via
+Defined in `project.godot`, not read raw: `aim_left` (A only), `aim_right`
+(D only), `fire` (Space), `restart` (R), `pause` (Esc), `debug_left`/
+`debug_right`/`debug_up`/`debug_down` (the raw arrows -- debug-only, see §9),
+`debug_shift_hold` (Shift). Mouse press-drag-release also aims and fires, via
 `Game._unhandled_input` — the HUD root Control is `mouse_filter = 2` so clicks
 reach it.
+
+Arrows used to double as `aim_left`/`aim_right` alongside A/D; they were split
+out when the debug menu needed the raw arrows for something else entirely
+(§9), so aiming is A/D-only now.
 
 ---
 
@@ -289,7 +312,71 @@ Title screen, mod menu, settings, persistence, unlocking and audio are all in
 
 ---
 
-## 9. Loose ends
+## 9. Debug menu
+
+`Esc` -> `PauseMenu` (built in code, `scripts/ui/pause_menu.gd`) -> **Enable
+debug mode** flips the `Debug` autoload's `enabled` flag. Everything below is
+gated behind it (`Game._tick_debug_input`, `Game._unhandled_input`,
+`DebugOverlay._on_debug_enabled_changed`) and otherwise inert.
+
+### Row-shift credit
+
+Shift+`↑` (`Game.debug_shift_rows(1)`) pulls the whole field up one row via
+`GridManager.shift_up()` and increments `Game.debug_row_credit`. The next
+`debug_row_credit` real round-completions (`_end_round`) shift down WITHOUT
+spawning a new row or advancing `round_number` -- they spend the credit
+instead, one per round, until it hits 0. Shift+`↓` does a raw shift down
+(`grid.advance()`, so it CAN end the run exactly like a normal round's shift
+can) and decrements credit, clamped at 0 -- there's no symmetric "debt" concept
+for shifting down past 0, since only the up-shift case was specced.
+
+### Expected-value shadows
+
+`Game.expected_ball_count` and `Game.expected_round_number` mirror what
+`ball_count` / `round_number` would be from pure normal play, with debug
+actions never touching them. Both advance once per `_end_round`, unconditional
+of the credit branch (i.e. a credit-consuming round still counts toward
+"how many rounds you've actually played"). `debug_ball_count_delta` and
+`debug_round_delta` / a direct row-credit shift touch only the real value.
+`DebugOverlay.refresh_readouts` shows the expected number in parentheses only
+when it differs from the real one.
+
+### Spawn row, and grid-apply
+
+`GameRules.spawn_row_index` (default 0) is which row `GridManager.spawn_row`
+targets -- raising it just wastes the rows above as permanently-empty padding
+(nothing ever back-fills them), which is a legitimate debug move for testing
+near the death row without playing 20 rounds to get there. The pause menu's
+grid width/height/kill-row/spawn-row fields all write straight to `rules` and
+call `Game._on_debug_grid_apply`, which resets `round_number`/`ball_count`/
+both expected shadows/`debug_row_credit` to their starting values, re-runs
+`_layout_playfield` + `_prime_board` (this wipes the board -- `GridManager.
+configure` frees every existing cell), and asks `DebugOverlay` to rebuild its
+row buttons. There is no attempt to preserve the old board across a resize.
+
+### Click/tap damage, row-clear, clear-all
+
+`Game.debug_damage_at` (1 damage) / with `destroy: true` (full value, via
+`Block.hit(block.value)`) is reached from a left-click on a block
+(`_unhandled_input`) or a Shift+click (`Input.is_action_pressed(
+"debug_shift_hold")` at the same point). `GridManager.clear_row` / `clear_all`
+(new this pass) do the same through `Block.hit()`, which is why none of this
+inflates `round_damage`/`total_damage` -- those only move through
+`Ball.block_damaged`, which nothing here emits.
+
+### Touch: NOT verified
+
+The on-screen D-pad (presses the same `debug_up`/`down`/`left`/`right`
+actions a keyboard would via `Input.action_press`), the center shift-toggle
+button, and the two-finger-tap destroy gesture (`Game._handle_debug_touch`,
+tracking concurrent `InputEventScreenTouch` indices) are built to spec but
+**never run on real touch hardware** -- there's no Android/touch build yet
+(§8 task 5, ROADMAP.md). Treat the feel of both as unverified until someone
+tries them on an actual device.
+
+---
+
+## 10. Loose ends
 
 - `icon.svg` is a placeholder. Six neon candidates are in `branding/icons/`;
   Theo picks one and it gets copied over `icon.svg`. Until then the icon is
@@ -301,3 +388,6 @@ Title screen, mod menu, settings, persistence, unlocking and audio are all in
   milestone audio cue for a clear board, so the detection will be wanted.
 - No `export_presets.cfg` yet; it is gitignored, so the first exporter will need
   to decide whether to keep it out.
+- Currency pickups, cosmetic skins (ball/block/background), and impact
+  VFX/SFX are requested (see the design chat) but not started: no economy
+  numbers, asset sources, or names exist yet for any of the three.

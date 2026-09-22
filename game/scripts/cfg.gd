@@ -41,6 +41,7 @@ const GRID_TOP := Board.GRID_TOP
 const GRID_WIDTH := Board.GRID_WIDTH
 const SHOOTER_HEIGHT := Board.SHOOTER_HEIGHT
 const SIDE_MARGIN := Board.SIDE_MARGIN
+const SPAWN_ROW_INDEX := Board.SPAWN_ROW_INDEX
 
 # Spawning
 const MAX_OPEN_SLOTS := Spawning.MAX_OPEN_SLOTS

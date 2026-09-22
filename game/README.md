@@ -19,12 +19,40 @@ main scene.
 
 | Input | Action |
 | --- | --- |
-| `←` `→` or `A` `D` | Rotate the aim line (clamped to ±78°) |
+| `A` `D` | Rotate the aim line (clamped to ±78°) |
 | `Space` | Fire the round's balls |
 | Click-drag, release | Aim and fire with the mouse |
-| `↓` | Debug: end the round without firing (shift down, spawn a row) |
-| `↑` | Debug: pull the field back up a row |
 | `R` | Restart |
+| `Esc` | Pause menu |
+
+`←` `→` `↑` `↓` are reserved for the debug menu (see below), not aiming --
+that's deliberately A/D-only now so the two don't fight over the same keys.
+
+## Debug menu
+
+`Esc` opens the pause menu, which has an **Enable debug mode** checkbox.
+While it's on:
+
+| Input | Action |
+| --- | --- |
+| Click/tap a block | 1 damage |
+| Shift+click, or a two-finger tap | Destroy that block outright |
+| `↑` `↓` | Ball count +/- 1 |
+| Shift+`↑` `↓` | Shift the whole field up/down one row |
+| `←` `→` (held) | Move the shooter (and any live balls) sideways |
+| Shift+`←` `→` | Level +/- 1 |
+
+Shifting the field up "banks" a credit: the next N real round-completions
+shift down without spawning a new row or advancing the level, since an
+up-shift manufactures slack that normal play didn't earn. On screen (touch or
+mouse), a `+`-shaped D-pad does the same four directions, with a center toggle
+button standing in for holding Shift; a button next to each row clears it, and
+a bottom-left hold-to-fill button clears the whole field. The pause menu also
+has grid width/height/kill-row/spawn-row fields (Apply resets the board), a
+game-mods stub, and a save-game-state stub.
+
+The on-screen D-pad and two-finger-tap gesture are unverified on real touch
+hardware -- there's no Android/touch build yet (see ROADMAP.md).
 
 ## How a round works
 
@@ -33,8 +61,9 @@ main scene.
 3. Balls bounce off walls, ceiling and blocks; each contact removes one point
    of block value. Crossing the floor line takes a ball out of play.
 4. Once the last ball is down, the shooter slides to where the **first** ball
-   landed, banked `+1 ball` pickups are applied, the field shifts down one row,
-   and a new row spawns at the top.
+   landed, banked `+1 ball` pickups are applied, a new row spawns at the top,
+   and the field shifts down one row -- in that order, so row 0 reads as
+   clear again once the shift settles, the same as it does before round 1.
 5. A block reaching the bottom row ends the run.
 
 ## Tuning
@@ -78,6 +107,9 @@ game/
   scripts/
     cfg.gd             Cfg autoload -- thin index over scripts/config/*.gd
     config/            the numbers, one small file per domain
+    debug_state.gd     Debug autoload -- the debug-mode on/off flag
+    ui/pause_menu.gd   pause menu: debug toggle, grid tuning, restart
+    ui/debug_overlay.gd  row-clear buttons, clear-all, on-screen D-pad
     game.gd            round loop, playfield construction, scoring
     game_rules.gd      every tunable number (defaults from Cfg) + the mod hooks
     grid_manager.gd    the block lattice: spawn, shift, loss check

@@ -1,9 +1,11 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/game.gd" id="1_game"]
 [ext_resource type="Script" path="res://scripts/grid_manager.gd" id="2_grid"]
 [ext_resource type="Script" path="res://scripts/shooter.gd" id="3_shooter"]
 [ext_resource type="Script" path="res://scripts/hud.gd" id="4_hud"]
+[ext_resource type="Script" path="res://scripts/ui/pause_menu.gd" id="5_pause"]
+[ext_resource type="Script" path="res://scripts/ui/debug_overlay.gd" id="6_debug"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_game")
@@ -105,3 +107,9 @@ theme_override_font_sizes/font_size = 64
 text = "GAME OVER"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="DebugOverlay" type="CanvasLayer" parent="."]
+script = ExtResource("6_debug")
+
+[node name="PauseMenu" type="CanvasLayer" parent="."]
+script = ExtResource("5_pause")
