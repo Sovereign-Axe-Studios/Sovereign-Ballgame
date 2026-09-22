@@ -39,9 +39,16 @@ main scene.
 
 ## Tuning
 
-Everything lives in `scripts/game_rules.gd`. To play with values without
-touching code, create a `GameRules` resource (`.tres`) in the editor and drop it
-on the `Main` node's **Rules** property.
+The numbers live in `scripts/config/*.gd`, one small file per domain (board,
+spawning, ball, wall corners, shooter, loss), indexed by the `Cfg` autoload
+(`scripts/cfg.gd`). `scripts/game_rules.gd` reads its `@export` defaults from
+those same files, so `Cfg.BALL_SPEED` and a fresh `GameRules.new().ball_speed`
+are always the same number.
+
+To play with values without touching code, create a `GameRules` resource
+(`.tres`) in the editor and drop it on the `Main` node's **Rules** property —
+that overrides the per-run instance without touching the shipped defaults in
+`scripts/config/`.
 
 ### Row spawning
 
@@ -69,8 +76,10 @@ game/
   docs/ROADMAP.md      build order, with what is done marked
   scenes/              main, ball, block, pickup
   scripts/
+    cfg.gd             Cfg autoload -- thin index over scripts/config/*.gd
+    config/            the numbers, one small file per domain
     game.gd            round loop, playfield construction, scoring
-    game_rules.gd      every tunable number + the mod hooks
+    game_rules.gd      every tunable number (defaults from Cfg) + the mod hooks
     grid_manager.gd    the block lattice: spawn, shift, loss check
     ball.gd            constant-speed reflector (not a RigidBody2D, on purpose)
     block.gd           numbered brick, ROYGBIV by health

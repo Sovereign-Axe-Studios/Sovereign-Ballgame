@@ -51,7 +51,9 @@ that can end a round, and it does so on `_to_fire <= 0 and _live_balls <= 0`.
 
 | File | Holds | Worth knowing |
 | --- | --- | --- |
-| `scripts/game_rules.gd` | Every tunable + 5 virtual hooks | The mod seam. See §5. |
+| `scripts/cfg.gd` | `Cfg` autoload — thin index over `scripts/config/*.gd` | Flat re-exports (`Cfg.GRID_WIDTH`) plus namespaced access (`Cfg.Board.GRID_WIDTH`). No runtime-override layer yet — see its header comment. |
+| `scripts/config/*.gd` | The numbers, one file per domain (`board`, `spawning`, `ball`, `wall_corners`, `shooter`, `loss`) | Where a value's rationale comment actually lives. `GameRules` preloads these directly rather than reading through `Cfg` — see below. |
+| `scripts/game_rules.gd` | Every tunable (defaulted from `scripts/config/*.gd`) + 5 virtual hooks | The mod seam. See §5. |
 | `scripts/game.gd` | `Game` — round state machine, playfield construction, scoring, input | `_ready` computes cell size and builds walls; `_draw` paints background, walls, floor line |
 | `scripts/grid_manager.gd` | `GridManager` — the block lattice | `cells[row][col]` -> `Block`, `BallPickup` or `null` |
 | `scripts/ball.gd` | `Ball` — constant-speed reflector | Manual substep loop, corner jitter, anti-horizontal-stall |
@@ -158,6 +160,20 @@ reach it.
 ---
 
 ## 5. The mod layer — where it is going
+
+**Cfg split (added after this doc's original date).** Every `GameRules`
+`@export` default now comes from a domain file in `scripts/config/*.gd`
+(`board`, `spawning`, `ball`, `wall_corners`, `shooter`, `loss`), indexed by
+the `Cfg` autoload (`scripts/cfg.gd`) — same convention as the Sovereign Axe
+Battleships project. `GameRules` preloads the domain files directly rather
+than reading through `Cfg`, because a `Resource`'s `@export` defaults must
+resolve even when the editor instantiates one outside of a running game,
+before any autoload exists. `GameRules` stays the mod seam — it still holds
+the virtual hooks below and is still what gameplay scripts read — `Cfg` is
+just where the raw numbers and their rationale live now, and where any script
+that is not a gameplay script can read a constant without going through a
+`GameRules` instance. There is no runtime-override layer (`tuned()` /
+`set_tuned()`) yet, deliberately: there is no debug menu to write one.
 
 `GameRules` currently exposes five hooks, and they are the proof of concept, not
 the finished design:
