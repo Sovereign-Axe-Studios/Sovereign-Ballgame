@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Sovereign Ballgame - app icon. Sovereign Axe Studios.
+
+  Fifth in the neon set, following the rules the siblings arrived at the hard
+  way (`../Sovereign Battleships/game/icon.svg`, `../Sovereign War/game/icon.svg`,
+  `../theo-asteroids/game/icon.svg`, `../Sovereign Stacker/game/icon.svg`):
+
+  NO BLUR FILTERS. Every glow is STACKED STROKES - a wide faint halo built up to
+  a near-white core - never `feGaussianBlur`. Godot rasterises SVG through
+  ThorVG, whose filter support is patchy, so the glow has to be geometry that is
+  guaranteed to survive the import.
+
+  FULL BLEED, no rounded corners. iOS applies its own squircle mask; a rounded
+  rect underneath leaves transparent slivers at the corners. Nothing meaningful
+  sits within ~10% of an edge, which is the mask's own bite.
+
+  AUTHORED AT 1024. Godot rasterises an SVG at its DECLARED size and the iOS
+  exporter resamples that bitmap into each of the 16 AppIcon slots, so authoring
+  at 128 would upscale 8x into the App Store's 1024 slot. At 1024 every slot is
+  a downsample.
+
+  COLOURS ARE THIS GAME'S OWN SHIPPED TOKENS, read off `scripts/palette.gd`
+  rather than invented. The ground is `Palette.BACKGROUND` exactly; the balls
+  are white because `Palette.BALL` is; and the two accents are the warm and cool
+  ends of the `Palette.ROYGBIV` block-health ramp, brightened for glow:
+    #11151c  Palette.BACKGROUND   #ff9a2e  accent  (amber, the shot)
+    #b44ad8  accent2 (violet, the high-value bricks)
+    #fff0dc / #f6e4ff  cores       #ffffff  Palette.BALL
+  Editing `scripts/palette.gd` does NOT restyle this file - an app icon is baked
+  into the build long before any script runs - so the hexes are duplicated here
+  deliberately and this comment is the pointer back. Note this is the one place
+  in the project where a number lives outside `scripts/game_rules.gd` and is
+  correct: an icon is not a gameplay value and cannot read a Resource.
+
+  THE MOTIF is one round: aim, a bank off the right wall, and the volley
+  arriving in the brick row. Balls are spaced along the path rather than bunched
+  because they leave the shooter in sequence (`ball_fire_interval`), so several
+  are in flight at once - the mark shows a round in progress, not a single shot.
+
+  A straight vertical volley was tried first and cut: it reads as any brick
+  breaker ever made. The BANK is what distinguishes this game's aiming, so the
+  path had to turn at least once to be about Ballgame specifically.
+
+  The wall is drawn only where the shot meets it. A full-height wall framed the
+  mark and fought the squircle mask for the same edge.
+
+  iOS, WHEN IT COMES: Battleships bakes its icon to an opaque `icon.png` via
+  `tools/bake_icon.gd`, because Godot's SVG rasteriser always emits RGBA and App
+  Store Connect rejects the 1024 marketing icon for CONTAINING an alpha channel
+  (ITMS-90717) even when every sample is opaque. Ballgame has no `tools/` dir and
+  `project.godot` points at `res://icon.svg`, which is fine everywhere except an
+  App Store submission. Port that bake step before the first TestFlight upload.
+-->
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="wispAmber" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0"    stop-color="#ff9a2e" stop-opacity="0.26"/>
+      <stop offset="0.55" stop-color="#ff9a2e" stop-opacity="0.09"/>
+      <stop offset="1"    stop-color="#ff9a2e" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="wispViolet" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0"    stop-color="#b44ad8" stop-opacity="0.30"/>
+      <stop offset="0.55" stop-color="#8e24aa" stop-opacity="0.10"/>
+      <stop offset="1"    stop-color="#8e24aa" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#11151c"/>
+  <rect x="180" y="-200" width="980" height="980" fill="url(#wispViolet)"/>
+  <rect x="-160" y="300" width="960" height="960" fill="url(#wispAmber)"/>
+
+  <!-- The right wall, drawn only where the shot meets it. A full-height wall
+       would frame the mark and fight the squircle mask. -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M888,430V742" stroke="#b44ad8" stroke-width="26" opacity="0.18"/>
+    <path d="M888,430V742" stroke="#b44ad8" stroke-width="12" opacity="0.55"/>
+  </g>
+
+  <!-- The brick row. Violet is the top of the ROYGBIV health ramp, so the
+       highest-value blocks are the ones the mark shows. -->
+  <g fill="#b44ad8" fill-opacity="0.16"><rect x="196" y="230" width="190" height="124" rx="14"/><rect x="403" y="230" width="190" height="124" rx="14"/><rect x="610" y="230" width="190" height="124" rx="14"/></g>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="#b44ad8" stroke-width="28" opacity="0.1"><rect x="196" y="230" width="190" height="124" rx="14"/><rect x="403" y="230" width="190" height="124" rx="14"/><rect x="610" y="230" width="190" height="124" rx="14"/></g><g stroke="#b44ad8" stroke-width="18" opacity="0.18"><rect x="196" y="230" width="190" height="124" rx="14"/><rect x="403" y="230" width="190" height="124" rx="14"/><rect x="610" y="230" width="190" height="124" rx="14"/></g><g stroke="#b44ad8" stroke-width="11" opacity="0.36"><rect x="196" y="230" width="190" height="124" rx="14"/><rect x="403" y="230" width="190" height="124" rx="14"/><rect x="610" y="230" width="190" height="124" rx="14"/></g><g stroke="#b44ad8" stroke-width="6" opacity="0.9"><rect x="196" y="230" width="190" height="124" rx="14"/><rect x="403" y="230" width="190" height="124" rx="14"/><rect x="610" y="230" width="190" height="124" rx="14"/></g><g stroke="#f6e4ff" stroke-width="2.5" opacity="0.95"><rect x="196" y="230" width="190" height="124" rx="14"/><rect x="403" y="230" width="190" height="124" rx="14"/><rect x="610" y="230" width="190" height="124" rx="14"/></g></g>
+
+  <!-- The shot: one aim, one wall bounce, into the row. Two segments rather
+       than one straight line because the bank IS the game - a vertical shot
+       would read as any brick breaker ever made. -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="#ff9a2e" stroke-width="38" opacity="0.1"><path d="M512,852L880,562L616,354"/></g><g stroke="#ff9a2e" stroke-width="24" opacity="0.2"><path d="M512,852L880,562L616,354"/></g><g stroke="#ff9a2e" stroke-width="14" opacity="0.38"><path d="M512,852L880,562L616,354"/></g><g stroke="#fff0dc" stroke-width="5" opacity="0.95"><path d="M512,852L880,562L616,354"/></g></g>
+
+  <!-- The volley, spaced along the path: balls leave the shooter in sequence,
+       so several are in flight at once. -->
+  <g fill="#ffffff"><circle cx="604" cy="779" r="17"/><circle cx="696" cy="707" r="17"/><circle cx="788" cy="634" r="17"/><circle cx="788" cy="489" r="17"/><circle cx="695" cy="416" r="17"/></g>
+
+  <!-- The shooter. -->
+  <circle cx="512" cy="852" r="54" fill="#ff9a2e" fill-opacity="0.20"/>
+  <circle cx="512" cy="852" r="31" fill="#ffffff"/>
+</svg>

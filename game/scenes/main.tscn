@@ -1,0 +1,107 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/game.gd" id="1_game"]
+[ext_resource type="Script" path="res://scripts/grid_manager.gd" id="2_grid"]
+[ext_resource type="Script" path="res://scripts/shooter.gd" id="3_shooter"]
+[ext_resource type="Script" path="res://scripts/hud.gd" id="4_hud"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_game")
+
+[node name="Walls" type="Node2D" parent="."]
+
+[node name="Grid" type="Node2D" parent="."]
+script = ExtResource("2_grid")
+
+[node name="Balls" type="Node2D" parent="."]
+
+[node name="Shooter" type="Node2D" parent="."]
+script = ExtResource("3_shooter")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+script = ExtResource("4_hud")
+
+[node name="Root" type="Control" parent="HUD"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="RoundLabel" type="Label" parent="HUD/Root"]
+layout_mode = 0
+offset_left = 44.0
+offset_top = 44.0
+offset_right = 620.0
+offset_bottom = 124.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.902, 0.922, 0.949, 1)
+theme_override_font_sizes/font_size = 60
+text = "ROUND 1"
+vertical_alignment = 1
+
+[node name="BallsLabel" type="Label" parent="HUD/Root"]
+layout_mode = 0
+offset_left = 44.0
+offset_top = 130.0
+offset_right = 620.0
+offset_bottom = 186.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.486, 0.969, 0.769, 1)
+theme_override_font_sizes/font_size = 40
+text = "BALLS 1"
+vertical_alignment = 1
+
+[node name="RoundDamageLabel" type="Label" parent="HUD/Root"]
+layout_mode = 0
+offset_left = 500.0
+offset_top = 52.0
+offset_right = 1036.0
+offset_bottom = 110.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.545, 0.592, 0.659, 1)
+theme_override_font_sizes/font_size = 36
+text = "THIS SHOT  0"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="TotalDamageLabel" type="Label" parent="HUD/Root"]
+layout_mode = 0
+offset_left = 500.0
+offset_top = 130.0
+offset_right = 1036.0
+offset_bottom = 186.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.545, 0.592, 0.659, 1)
+theme_override_font_sizes/font_size = 36
+text = "TOTAL  0"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="HintLabel" type="Label" parent="HUD/Root"]
+layout_mode = 0
+offset_left = 44.0
+offset_top = 1838.0
+offset_right = 1036.0
+offset_bottom = 1892.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.4, 0.44, 0.5, 1)
+theme_override_font_sizes/font_size = 30
+text = "← → aim   ·   SPACE or drag to fire   ·   ↑ ↓ debug shift   ·   R restart"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="GameOverLabel" type="Label" parent="HUD/Root"]
+visible = false
+layout_mode = 0
+offset_left = 60.0
+offset_top = 1320.0
+offset_right = 1020.0
+offset_bottom = 1700.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.898, 0.239, 0.22, 1)
+theme_override_font_sizes/font_size = 64
+text = "GAME OVER"
+horizontal_alignment = 1
+vertical_alignment = 1

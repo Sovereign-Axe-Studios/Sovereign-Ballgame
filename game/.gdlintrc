@@ -1,0 +1,4 @@
+# gdtoolkit / gdlint config
+max-line-length: 120
+disable:
+  - class-definitions-order
