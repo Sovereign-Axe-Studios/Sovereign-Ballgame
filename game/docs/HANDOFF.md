@@ -72,7 +72,10 @@ that can end a round, and it does so on `_to_fire <= 0 and _live_balls <= 0`.
 | `scripts/hud.gd` | `HUD` — four counters + game over | Labels live in `main.tscn` under `HUD/Root` |
 | `scripts/palette.gd` | Shared colours, ROYGBIV health ramp | `Palette.health_color(value, max_value = 100)` |
 | `scripts/debug_state.gd` | `Debug` autoload — the debug-mode flag | Session-only; survives a scene reload on purpose. See §9. |
-| `scripts/settings_state.gd` | `Settings` autoload — persisted user prefs | UI scale, screen shake strength, SFX/music volume. Saved to `user://settings.cfg` on every change. |
+| `scripts/settings_state.gd` | `Settings` autoload — persisted user prefs | UI scale, screen shake strength, SFX/music volume, background-grid toggle. Saved to `user://settings.cfg` on every change. |
+| `scripts/skins.gd` | `Skins` autoload — ball/background/block test swatches | Session-only (like `Debug`, not `Settings`). `Palette.health_color()` reads `Skins.block().ramp`. See §10. |
+| `scripts/vfx/block_chunk.gd`, `block_fragment.gd` | Hit chunks / destroy fragments | `.new()` + `setup()`, no scene. See §10. |
+| `scripts/falling_ball.gd` | `FallingBall` — the +1 ball pickup's cosmetic drop | Reports `landed`; `Game` only increments `pending_balls` on that signal. See §10. |
 | `scripts/ui/pause_menu.gd` | `PauseMenu` — 3 pages: root (Resume/Settings/Debug Menu/Main menu), Settings, Debug Menu | Built in code, not `.tscn`; `process_mode = ALWAYS` so it works while paused. See §9. |
 | `scripts/ui/debug_overlay.gd` | `DebugOverlay` — row-clear buttons, hold-to-clear-all, on-screen D-pad, expected-count readouts | Visible only while `Debug.enabled`. See §9. |
 
@@ -410,18 +413,81 @@ tries them on an actual device.
 
 ---
 
-## 10. Loose ends
+## 10. Skins and visual feedback
+
+### Skins (test swatches, not shipped content)
+
+`Skins` (autoload, `scripts/skins.gd`) holds a handful of ball / background /
+block colour treatments -- session-only, like `Debug`, not persisted like
+`Settings`, since "which swatch was I comparing" isn't worth remembering
+across a restart and there's no art to skin yet, just recolours. Cycle
+buttons live on the Debug Menu page. `Palette.health_color()` now reads
+`Skins.block().ramp` instead of a hardcoded `ROYGBIV` (`ROYGBIV` is still
+there, just as the default skin's own ramp); `Ball`, `Shooter` and
+`Game._draw()`'s background read `Skins.ball()` / `Skins.background()` the
+same way, and `Block` re-`_refresh()`es on `Skins.changed` so existing blocks
+on the board recolour live rather than only the next-spawned ones.
+
+### Background grid toggle
+
+`Settings.show_background_grid` (default on, preserving the prior always-on
+look) gates the faint per-cell lines in `GridManager._draw()` -- one line per
+cell edge, i.e. always 1:1 with the actual gameplay grid, never a decorative
+pattern at its own scale. The death-row tint is NOT gated by this -- it's a
+gameplay indicator, not decoration.
+
+### Hit chunks / destroy fragments
+
+`Game._on_block_damaged` spawns 3-5 `BlockChunk`s (`scripts/vfx/
+block_chunk.gd`) when `is_instance_valid(block) and block.value > 0` --
+i.e. the block survived. `Game._on_block_destroyed` (newly wired to
+`GridManager.block_destroyed`, previously unlistened -- see the loose end
+this replaces) spawns 4 `BlockFragment`s per kill. Both are plain
+`Node2D.new()` + `setup()`, no `.tscn`, added under a new `Effects` node
+(sibling of `Balls`/`Grid`/`Walls` in `main.tscn`) so their lifetime is
+independent of the grid (which gets wiped on a debug resize) and of
+`balls_root`. `Block.get_color()` / `get_size()` are the two accessors added
+to feed these. "Falls to the ground" is a short local fall (gravity + fixed
+lifetime), not a flight to `rules.floor_y` -- a block near the top of a
+9-row board can be 1000+ px above the actual floor, and covering that in
+under a second would read as a launch, not a drop.
+
+### Balls gather instead of vanishing
+
+`Game._on_ball_finished` no longer frees a landed ball -- it appends to
+`_landed_balls` and only frees it (via `Ball.return_to`, a tweened quadratic
+Bezier arc with a random height) once `_end_round` knows the shared target
+(the shooter's new X). The shooter itself now `slide_to_x`s there instead of
+snapping. Purely cosmetic and non-blocking -- the round state machine moves
+on to AIMING immediately regardless of whether the gather animation has
+finished playing.
+
+### The +1 ball pickup drops a ball
+
+`Game._on_pickup_collected` no longer increments `pending_balls` directly --
+it spawns a `FallingBall` (`scripts/falling_ball.gd`) at the pickup's
+position, and `pending_balls += 1` only happens in `_on_powerup_ball_landed`,
+wired to the `FallingBall.landed` signal once it reaches `rules.floor_y`.
+`FallingBall` never collides with anything; it's a plain node moving itself
+down each frame.
+
+---
+
+## 11. Loose ends
 
 - `icon.svg` is a placeholder. Six neon candidates are in `branding/icons/`;
   Theo picks one and it gets copied over `icon.svg`. Until then the icon is
   deliberately plain.
-- `GridManager.block_destroyed` is emitted but nothing listens. It exists for
-  the juice work in task 3 and for Fracture/Infection-style mods.
+- No screen shake yet -- `Settings.screen_shake_strength` is plumbed and
+  persisted, but nothing reads it. Wire it in when screen shake is built
+  rather than adding the setting then.
 - There is no "board cleared" handling. If every block dies, the next row still
   spawns and play continues, which is correct — but Theo's notes mention a
   milestone audio cue for a clear board, so the detection will be wanted.
 - No `export_presets.cfg` yet; it is gitignored, so the first exporter will need
   to decide whether to keep it out.
-- Currency pickups, cosmetic skins (ball/block/background), and impact
-  VFX/SFX are requested (see the design chat) but not started: no economy
-  numbers, asset sources, or names exist yet for any of the three.
+- Currency pickups are requested but not started -- no economy numbers or a
+  name for the currency exist yet.
+- "Skins" so far are recolours (§10), not asset-based skins -- there is no
+  art pipeline, and no SFX exist at all (impact VFX are done, impact SFX are
+  not -- the "SFX" audio bus is real, nothing plays through it yet).

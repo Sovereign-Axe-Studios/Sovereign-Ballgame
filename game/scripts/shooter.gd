@@ -6,12 +6,22 @@ var rules: GameRules
 var aim_degrees: float = 0.0
 var active: bool = true
 
+func _ready() -> void:
+	Skins.changed.connect(queue_redraw)
+
 func setup(r: GameRules) -> void:
 	rules = r
 	queue_redraw()
 
 func aim_direction() -> Vector2:
 	return Vector2.UP.rotated(deg_to_rad(aim_degrees))
+
+## Cosmetic slide to a new X, used when the round hands the shooter to
+## wherever the first ball landed -- an instant snap read as a glitch.
+func slide_to_x(x: float, duration: float) -> void:
+	var tw := create_tween()
+	tw.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tw.tween_property(self, "position:x", x, duration)
 
 func nudge(degrees: float) -> void:
 	set_aim(aim_degrees + degrees)
@@ -31,7 +41,7 @@ func aim_at(world_point: Vector2) -> void:
 	set_aim(rad_to_deg(Vector2.UP.angle_to(to_point)))
 
 func _draw() -> void:
-	var base := Palette.BALL
+	var base := Skins.ball().color
 	draw_circle(Vector2.ZERO, 22.0, base if active else base.darkened(0.5))
 	draw_arc(Vector2.ZERO, 30.0, 0.0, TAU, 32, Palette.WALL.lightened(0.3), 3.0, true)
 	if not active:

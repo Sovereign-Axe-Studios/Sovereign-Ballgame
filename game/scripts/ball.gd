@@ -13,6 +13,9 @@ var _done := false
 
 @onready var _shape: CollisionShape2D = $Collision
 
+func _ready() -> void:
+	Skins.changed.connect(queue_redraw)
+
 func launch(r: GameRules, from: Vector2, dir: Vector2) -> void:
 	rules = r
 	global_position = from
@@ -21,6 +24,27 @@ func launch(r: GameRules, from: Vector2, dir: Vector2) -> void:
 	circle.radius = r.ball_radius
 	_shape.shape = circle
 	queue_redraw()
+
+## Cosmetic-only: slides this (already finished, no-longer-colliding) ball
+## along a randomly-arced path to `target`, then frees it. Used once all
+## balls are down, to visually gather them at the new launch position rather
+## than having them just vanish where they landed -- see Game._end_round.
+func return_to(target: Vector2, duration: float) -> void:
+	var start := global_position
+	if start.distance_to(target) < 1.0:
+		queue_free()
+		return
+	var arc := randf_range(30.0, 120.0)
+	var control := (start + target) * 0.5 + Vector2(0.0, -arc)
+	var tw := create_tween()
+	tw.tween_method(
+		func(t: float) -> void:
+			var a := start.lerp(control, t)
+			var b := control.lerp(target, t)
+			global_position = a.lerp(b, t),
+		0.0, 1.0, duration
+	)
+	tw.tween_callback(queue_free)
 
 func _physics_process(delta: float) -> void:
 	if _done or rules == null:
@@ -100,5 +124,6 @@ func _finish() -> void:
 func _draw() -> void:
 	if rules == null:
 		return
-	draw_circle(Vector2.ZERO, rules.ball_radius, Palette.BALL)
-	draw_circle(Vector2(-rules.ball_radius * 0.3, -rules.ball_radius * 0.3), rules.ball_radius * 0.3, Color(1, 1, 1, 0.55))
+	var skin := Skins.ball()
+	draw_circle(Vector2.ZERO, rules.ball_radius, skin.color)
+	draw_circle(Vector2(-rules.ball_radius * 0.3, -rules.ball_radius * 0.3), rules.ball_radius * 0.3, skin.highlight)

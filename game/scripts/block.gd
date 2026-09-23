@@ -14,6 +14,15 @@ var _color := Color.WHITE
 @onready var _shape: CollisionShape2D = $Collision
 @onready var _label: Label = $Value
 
+func _ready() -> void:
+	Skins.changed.connect(_refresh)
+
+func get_color() -> Color:
+	return _color
+
+func get_size() -> float:
+	return _size
+
 ## Call after adding to the tree.
 func setup(start_value: int, cell_size: float, col: int, row: int) -> void:
 	value = maxi(1, start_value)

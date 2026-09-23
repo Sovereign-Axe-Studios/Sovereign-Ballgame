@@ -17,6 +17,8 @@ script = ExtResource("2_grid")
 
 [node name="Balls" type="Node2D" parent="."]
 
+[node name="Effects" type="Node2D" parent="."]
+
 [node name="Shooter" type="Node2D" parent="."]
 script = ExtResource("3_shooter")
 

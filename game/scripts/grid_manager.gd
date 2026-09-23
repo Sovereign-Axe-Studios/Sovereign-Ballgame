@@ -17,6 +17,9 @@ var cell_size: float = 100.0
 var origin := Vector2.ZERO          ## top-left corner of cell (0, 0)
 var cells: Array = []
 
+func _ready() -> void:
+	Settings.changed.connect(queue_redraw)
+
 func configure(r: GameRules, cell: float, org: Vector2) -> void:
 	rules = r
 	cell_size = cell
@@ -245,13 +248,19 @@ func _draw() -> void:
 		return
 	var w := float(rules.grid_width) * cell_size
 	var h := float(rules.grid_height) * cell_size
-	var faint := Color(1, 1, 1, 0.045)
-	for c in range(rules.grid_width + 1):
-		var x := float(c) * cell_size
-		draw_line(origin + Vector2(x, 0), origin + Vector2(x, h), faint, 1.0)
-	for r in range(rules.grid_height + 1):
-		var y := float(r) * cell_size
-		draw_line(origin + Vector2(0, y), origin + Vector2(w, y), faint, 1.0)
+
+	# One line per cell edge -- 1x1 against the actual gameplay grid, not a
+	# decorative pattern at its own scale. Settings-gated; the death-row
+	# tint below is a gameplay indicator, not decoration, so it always shows.
+	if Settings.show_background_grid:
+		var faint := Color(1, 1, 1, 0.045)
+		for c in range(rules.grid_width + 1):
+			var x := float(c) * cell_size
+			draw_line(origin + Vector2(x, 0), origin + Vector2(x, h), faint, 1.0)
+		for r in range(rules.grid_height + 1):
+			var y := float(r) * cell_size
+			draw_line(origin + Vector2(0, y), origin + Vector2(w, y), faint, 1.0)
+
 	# The row that ends the run.
 	var dy := float(rules.death_row()) * cell_size
 	draw_rect(Rect2(origin + Vector2(0, dy), Vector2(w, cell_size)), Color(0.9, 0.24, 0.22, 0.10), true)

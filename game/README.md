@@ -37,10 +37,13 @@ open their own page, with a **Back** button to return.
 ### Settings
 
 UI scale (zooms the HUD / pause / debug-overlay layers, 50–200%), screen
-shake strength (not consumed yet -- no screen shake exists), and SFX / Music
-volume, which move the "SFX" / "Music" audio buses (`audio/bus_layout.tres`;
-no sounds route through them yet either, but the buses and sliders are real).
-All four persist to `user://settings.cfg` via the `Settings` autoload.
+shake strength (not consumed yet -- no screen shake exists), SFX / Music
+volume (moves the "SFX" / "Music" audio buses in `audio/bus_layout.tres`; no
+sounds route through them yet either, but the buses and sliders are real),
+and **Show background grid** -- the faint per-cell lines over the playfield
+(one line per cell edge, always 1:1 with the gameplay grid, not a decorative
+pattern at its own scale). All five persist to `user://settings.cfg` via the
+`Settings` autoload.
 
 ### Debug menu
 
@@ -62,11 +65,31 @@ mouse), a `+`-shaped D-pad does the same four directions, with a center toggle
 button standing in for holding Shift; a button next to each row clears it, and
 a bottom-left hold-to-fill button clears the whole field. The Debug Menu page
 also has grid width/height/kill-row/spawn-row fields (Apply resets the
-board), a game-mods stub, a save-game-state stub, and **Restart** (moved here
-rather than the pause-menu root, to match the four-button spec above).
+board), a game-mods stub, a save-game-state stub, **Restart** (moved here
+rather than the pause-menu root, to match the four-button spec above), and a
+**Skins** section: Cycle buttons for a few alternate ball / background /
+block colour swatches, for quick comparison. Session-only, not persisted --
+these are dev test swatches (no art assets exist), not shipped content.
 
 The on-screen D-pad and two-finger-tap gesture are unverified on real touch
 hardware -- there's no Android/touch build yet (see ROADMAP.md).
+
+## Visual feedback
+
+- **Hit chunks.** A block that survives a hit pops 3-5 small squares in its
+  current health colour, which arc up/out and fall with a bit of gravity
+  before fading (~0.4s).
+- **Destroy fragments.** A destroyed block cracks into 4 quadrant pieces that
+  fly outward, tumble, and fade (~0.6-0.9s). "Falls to the ground" here means
+  a short local fall, not a flight to the play field's actual floor line --
+  see the comment in `scripts/vfx/block_fragment.gd` for why.
+- **Balls gather, they don't vanish.** Once every ball is down, the shooter
+  slides (not snaps) to the new launch position, and every other landed ball
+  follows its own randomly-arced curve to the same spot before fading out --
+  instead of each ball just disappearing where it landed.
+- **The +1 ball pickup drops a ball.** Collecting it spawns a cosmetic ball
+  that falls from the pickup to the floor; the ball count only ticks up once
+  it visibly lands, not the instant you touch the pickup.
 
 ## How a round works
 
@@ -124,17 +147,20 @@ game/
     config/            the numbers, one small file per domain
     debug_state.gd     Debug autoload -- the debug-mode on/off flag
     settings_state.gd  Settings autoload -- persisted user prefs
+    skins.gd           Skins autoload -- ball/background/block test swatches
+    falling_ball.gd    the +1 ball pickup's cosmetic drop-to-floor
+    vfx/               hit chunks + destroy fragments (no scene, built in code)
     ui/pause_menu.gd   pause menu pages: root, Settings, Debug Menu
     ui/debug_overlay.gd  row-clear buttons, clear-all, on-screen D-pad
     game.gd            round loop, playfield construction, scoring
     game_rules.gd      every tunable number (defaults from Cfg) + the mod hooks
     grid_manager.gd    the block lattice: spawn, shift, loss check
     ball.gd            constant-speed reflector (not a RigidBody2D, on purpose)
-    block.gd           numbered brick, ROYGBIV by health
+    block.gd           numbered brick, health-ramp coloured (skin-swappable)
     ball_pickup.gd     +1 ball
     shooter.gd         aim line
     hud.gd             round / balls / damage counters
-    palette.gd         shared colours
+    palette.gd         shared colours; health_color() reads the active skin
 ```
 
 Walls, ceiling and floor are built in code from `GameRules` rather than placed

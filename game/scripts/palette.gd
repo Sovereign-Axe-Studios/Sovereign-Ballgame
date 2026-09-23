@@ -11,7 +11,7 @@ const TEXT := Color("#e6ebf2")
 const TEXT_DIM := Color("#8b97a8")
 
 ## Red at low health through violet at `max_value`, clamped at both ends.
-const ROYGBIV := [
+const ROYGBIV: Array[Color] = [
 	Color("#e53935"), # red
 	Color("#fb8c00"), # orange
 	Color("#fdd835"), # yellow
@@ -21,13 +21,18 @@ const ROYGBIV := [
 	Color("#8e24aa"), # violet
 ]
 
+## Reads the active block skin's ramp (Skins.block().ramp) rather than
+## ROYGBIV directly, so a skin cycled from the Debug Menu recolours every
+## block that asks for a health colour from then on -- ROYGBIV is still the
+## default skin's ramp, just no longer hardcoded here.
 static func health_color(value: int, max_value: int = 100) -> Color:
+	var ramp: Array[Color] = Skins.block().ramp
 	var t := clampf(float(value) / float(maxi(1, max_value)), 0.0, 1.0)
-	var scaled := t * float(ROYGBIV.size() - 1)
+	var scaled := t * float(ramp.size() - 1)
 	var i := int(floor(scaled))
-	if i >= ROYGBIV.size() - 1:
-		return ROYGBIV[ROYGBIV.size() - 1]
-	return ROYGBIV[i].lerp(ROYGBIV[i + 1], scaled - float(i))
+	if i >= ramp.size() - 1:
+		return ramp[ramp.size() - 1]
+	return ramp[i].lerp(ramp[i + 1], scaled - float(i))
 
 ## Dark or light label text, whichever reads against the block colour.
 static func label_color(on: Color) -> Color:

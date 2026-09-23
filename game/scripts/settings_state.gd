@@ -20,6 +20,10 @@ var screen_shake_strength: float = 1.0
 ## buses are real and the sliders already move their volume.
 var sfx_volume: float = 1.0
 var music_volume: float = 1.0
+## The faint per-cell grid lines GridManager draws over the playfield.
+## Defaults on -- this preserves the look before the toggle existed rather
+## than changing anyone's first impression of the game.
+var show_background_grid: bool = true
 
 func _ready() -> void:
 	_load()
@@ -40,6 +44,10 @@ func set_sfx_volume(v: float) -> void:
 func set_music_volume(v: float) -> void:
 	music_volume = clampf(v, 0.0, 1.0)
 	_apply_bus_volume("Music", music_volume)
+	_save_and_notify()
+
+func set_show_background_grid(v: bool) -> void:
+	show_background_grid = v
 	_save_and_notify()
 
 func _save_and_notify() -> void:
@@ -64,6 +72,7 @@ func _load() -> void:
 		screen_shake_strength = cfg.get_value("settings", "screen_shake_strength", screen_shake_strength)
 		sfx_volume = cfg.get_value("settings", "sfx_volume", sfx_volume)
 		music_volume = cfg.get_value("settings", "music_volume", music_volume)
+		show_background_grid = cfg.get_value("settings", "show_background_grid", show_background_grid)
 	_apply_bus_volume("SFX", sfx_volume)
 	_apply_bus_volume("Music", music_volume)
 
@@ -73,4 +82,5 @@ func _save() -> void:
 	cfg.set_value("settings", "screen_shake_strength", screen_shake_strength)
 	cfg.set_value("settings", "sfx_volume", sfx_volume)
 	cfg.set_value("settings", "music_volume", music_volume)
+	cfg.set_value("settings", "show_background_grid", show_background_grid)
 	cfg.save(SAVE_PATH)

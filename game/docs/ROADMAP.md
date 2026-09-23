@@ -39,7 +39,14 @@
 - [x] Counter for damage overall
 - [x] Blocks change colour with health, ROYGBIV across 0–100
 - [x] Visual for the ball shooter
-- [ ] Juice: hit flash, screen shake, destruction particles
+- [~] Juice: hit chunks + destroy fragments done (procedural, no screen shake
+      yet -- Settings.screen_shake_strength is plumbed, unconsumed)
+- [x] Balls gather to the new launch position on a curved path instead of
+      vanishing where they land; the shooter slides rather than snaps
+- [x] +1 ball pickup spawns a falling ball that lands before the count ticks up
+- [x] A few alternate ball/background/block colour swatches, cycleable from
+      the Debug Menu for comparison (no art assets, so these are recolours,
+      not skins in the asset sense)
 
 ## Challenge
 - [x] Round advances once every ball is down

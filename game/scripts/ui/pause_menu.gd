@@ -27,6 +27,11 @@ var _ui_scale_slider: HSlider
 var _shake_slider: HSlider
 var _sfx_slider: HSlider
 var _music_slider: HSlider
+var _grid_check: CheckBox
+
+var _ball_skin_label: Label
+var _background_skin_label: Label
+var _block_skin_label: Label
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -34,7 +39,9 @@ func _ready() -> void:
 	_game = get_parent() as Game
 	_build_ui()
 	Settings.changed.connect(_apply_ui_scale)
+	Skins.changed.connect(_sync_skin_labels)
 	_apply_ui_scale()
+	_sync_skin_labels()
 	visible = false
 	_show_page(_root_page)
 
@@ -74,6 +81,12 @@ func _sync_fields() -> void:
 	_shake_slider.value = Settings.screen_shake_strength * 100.0
 	_sfx_slider.value = Settings.sfx_volume * 100.0
 	_music_slider.value = Settings.music_volume * 100.0
+	_grid_check.button_pressed = Settings.show_background_grid
+
+func _sync_skin_labels() -> void:
+	_ball_skin_label.text = "Ball skin: %s" % Skins.ball().skin_name
+	_background_skin_label.text = "Background: %s" % Skins.background().skin_name
+	_block_skin_label.text = "Block skin: %s" % Skins.block().skin_name
 
 func _on_apply_grid() -> void:
 	grid_apply_requested.emit(int(_width_box.value), int(_height_box.value), int(_kill_box.value), int(_spawn_box.value))
@@ -164,6 +177,11 @@ func _build_settings_page() -> Control:
 	_music_slider = _labeled_slider(col, "Music volume", 0.0, 100.0)
 	_music_slider.value_changed.connect(func(v: float) -> void: Settings.set_music_volume(v / 100.0))
 
+	_grid_check = CheckBox.new()
+	_grid_check.text = "Show background grid"
+	_grid_check.toggled.connect(func(pressed: bool) -> void: Settings.set_show_background_grid(pressed))
+	col.add_child(_grid_check)
+
 	var back_btn := Button.new()
 	back_btn.text = "Back"
 	back_btn.pressed.connect(func() -> void: _show_page(_root_page))
@@ -186,6 +204,14 @@ func _build_debug_page() -> Control:
 	mods_btn.disabled = true
 	mods_btn.tooltip_text = "Stub -- mod selection isn't built yet."
 	col.add_child(mods_btn)
+
+	col.add_child(_label("Skins (test swatches, not persisted)", 26))
+	_ball_skin_label = _label("Ball skin: ?", 20)
+	col.add_child(_skin_row(_ball_skin_label, func() -> void: Skins.cycle_ball()))
+	_background_skin_label = _label("Background: ?", 20)
+	col.add_child(_skin_row(_background_skin_label, func() -> void: Skins.cycle_background()))
+	_block_skin_label = _label("Block skin: ?", 20)
+	col.add_child(_skin_row(_block_skin_label, func() -> void: Skins.cycle_block()))
 
 	col.add_child(_label("Grid", 26))
 	var grid_row := HBoxContainer.new()
@@ -248,6 +274,17 @@ func _labeled(control: Control, caption: String) -> VBoxContainer:
 	v.add_child(_label(caption, 20))
 	v.add_child(control)
 	return v
+
+## A skin's name label plus a "Cycle" button, side by side.
+func _skin_row(name_label: Label, on_cycle: Callable) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	row.add_child(name_label)
+	var btn := Button.new()
+	btn.text = "Cycle"
+	btn.pressed.connect(on_cycle)
+	row.add_child(btn)
+	return row
 
 ## A caption label + HSlider pair, added to `col`; returns the slider so the
 ## caller wires its own value_changed.

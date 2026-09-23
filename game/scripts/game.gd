@@ -9,6 +9,9 @@ enum State { AIMING, FIRING, RESOLVING, GAME_OVER }
 
 const BallScene := preload("res://scenes/ball.tscn")
 const DEBUG_MOVE_SPEED := 700.0 ## px/sec for the debug left/right launch-position nudge.
+const SHOOTER_SLIDE_DURATION := 0.28
+const BALL_RETURN_MIN_DURATION := 0.32
+const BALL_RETURN_MAX_DURATION := 0.5
 
 ## Drop a .tres here to run the game under different rules. Empty = defaults.
 @export var rules: GameRules
@@ -17,6 +20,7 @@ const DEBUG_MOVE_SPEED := 700.0 ## px/sec for the debug left/right launch-positi
 @onready var shooter: Shooter = $Shooter
 @onready var balls_root: Node2D = $Balls
 @onready var walls_root: Node2D = $Walls
+@onready var effects_root: Node2D = $Effects
 @onready var hud: HUD = $HUD
 @onready var pause_menu: PauseMenu = $PauseMenu
 @onready var debug_overlay: DebugOverlay = $DebugOverlay
@@ -44,6 +48,7 @@ var _play_left: float = 0.0
 var _play_right: float = 0.0
 var _dragging: bool = false
 var _debug_touches: Dictionary = {} ## touch index -> screen position, for the two-finger-tap destroy gesture.
+var _landed_balls: Array[Ball] = [] ## finished but not yet freed -- gathered to the new launch spot in _end_round.
 
 
 func _ready() -> void:
@@ -52,7 +57,9 @@ func _ready() -> void:
 		rules = GameRules.new()
 
 	grid.pickup_collected.connect(_on_pickup_collected)
+	grid.block_destroyed.connect(_on_block_destroyed)
 	pause_menu.grid_apply_requested.connect(_on_debug_grid_apply)
+	Skins.changed.connect(queue_redraw)
 
 	_layout_playfield()
 	_prime_board()
@@ -218,25 +225,49 @@ func _on_ball_finished(ball: Ball) -> void:
 			_play_left + rules.ball_radius,
 			_play_right - rules.ball_radius
 		)
-	ball.queue_free()
+	# Not freed here -- kept around and gathered to the new launch spot once
+	# _end_round knows where that is. See return_to() on Ball.
+	_landed_balls.append(ball)
 	if _to_fire <= 0 and _live_balls <= 0:
 		_end_round()
 
-func _on_block_damaged(_block: Block, damage: int) -> void:
+func _on_block_damaged(block: Block, damage: int) -> void:
 	round_damage += damage
 	total_damage += damage
+	if is_instance_valid(block) and block.value > 0:
+		_spawn_hit_chunks(block.global_position, block.get_color(), block.get_size())
 	_refresh_hud()
 
-func _on_pickup_collected(_pickup: BallPickup) -> void:
+func _on_block_destroyed(block: Block) -> void:
+	_spawn_destroy_fragments(block.global_position, block.get_color(), block.get_size())
+
+## Cosmetic-only: the actual +1 doesn't land until the dropped ball visually
+## reaches the floor -- see _on_powerup_ball_landed.
+func _on_pickup_collected(pickup: BallPickup) -> void:
+	var falling := FallingBall.new()
+	effects_root.add_child(falling)
+	falling.global_position = pickup.global_position
+	falling.setup(rules.ball_radius, rules.floor_y)
+	falling.landed.connect(_on_powerup_ball_landed)
+
+func _on_powerup_ball_landed(_ball: FallingBall) -> void:
 	pending_balls += 1
 	_refresh_hud()
 
 func _end_round() -> void:
 	state = State.RESOLVING
 
-	# The shooter follows the first ball home, the way the original does.
+	# The shooter follows the first ball home, the way the original does --
+	# now a slide rather than a snap, with every other landed ball gathered
+	# to the same spot along its own random arc rather than just vanishing.
+	var target := Vector2(shooter.position.x, rules.floor_y - rules.shooter_height)
 	if rules.balls_return_to_lander and _has_landing:
-		shooter.position.x = _landing_x
+		target.x = _landing_x
+		shooter.slide_to_x(target.x, SHOOTER_SLIDE_DURATION)
+	for ball in _landed_balls:
+		if is_instance_valid(ball):
+			ball.return_to(target, randf_range(BALL_RETURN_MIN_DURATION, BALL_RETURN_MAX_DURATION))
+	_landed_balls.clear()
 
 	ball_count += pending_balls
 	expected_ball_count += pending_balls
@@ -397,12 +428,43 @@ func _handle_debug_touch(t: InputEventScreenTouch) -> void:
 
 # --------------------------------------------------------------- playfield fx
 
+## A handful of chunks popped upward/outward by a hit the block survived.
+func _spawn_hit_chunks(pos: Vector2, color: Color, block_size: float) -> void:
+	var count := randi_range(3, 5)
+	for i in range(count):
+		var chunk := BlockChunk.new()
+		effects_root.add_child(chunk)
+		chunk.position = pos
+		var angle := randf_range(-PI * 0.85, -PI * 0.15) # mostly upward
+		var speed := randf_range(120.0, 260.0)
+		chunk.setup(
+			color,
+			block_size * randf_range(0.08, 0.16),
+			Vector2.RIGHT.rotated(angle) * speed,
+			randf_range(0.35, 0.55),
+			randf_range(-6.0, 6.0)
+		)
+
+## Four quadrant-sized pieces cracking apart when a block is destroyed.
+func _spawn_destroy_fragments(pos: Vector2, color: Color, block_size: float) -> void:
+	for i in range(4):
+		var frag := BlockFragment.new()
+		effects_root.add_child(frag)
+		var offset := Vector2(
+			(float(i % 2) - 0.5) * block_size * 0.4,
+			(float(i / 2) - 0.5) * block_size * 0.4
+		)
+		frag.position = pos + offset
+		var outward := offset.normalized() if offset.length_squared() > 0.01 else Vector2.RIGHT.rotated(randf() * TAU)
+		var vel := outward * randf_range(60.0, 140.0) + Vector2(0.0, -randf_range(40.0, 90.0))
+		frag.setup(color, block_size * 0.46, vel, randf_range(0.6, 0.9), randf_range(-4.0, 4.0))
+
 func _draw() -> void:
 	if rules == null:
 		return
 	var vp_w := float(ProjectSettings.get_setting("display/window/size/viewport_width"))
 	var vp_h := float(ProjectSettings.get_setting("display/window/size/viewport_height"))
-	draw_rect(Rect2(Vector2.ZERO, Vector2(vp_w, vp_h)), Palette.BACKGROUND, true)
+	draw_rect(Rect2(Vector2.ZERO, Vector2(vp_w, vp_h)), Skins.background().color, true)
 
 	# Walls and ceiling.
 	var t := 8.0
