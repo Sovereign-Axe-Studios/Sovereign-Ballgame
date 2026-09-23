@@ -40,6 +40,12 @@ func aim_at(world_point: Vector2) -> void:
 		return
 	set_aim(rad_to_deg(Vector2.UP.angle_to(to_point)))
 
+## The angle to a world position with NO clamp applied -- used to tell a
+## release that's genuinely past max_aim_degrees (cancel the shot) from one
+## that just landed on the clamp (still a valid, if maxed-out, shot).
+func raw_aim_degrees(world_point: Vector2) -> float:
+	return rad_to_deg(Vector2.UP.angle_to(world_point - global_position))
+
 func _draw() -> void:
 	match Skins.launcher().shape:
 		Skins.LauncherShape.CANNON:

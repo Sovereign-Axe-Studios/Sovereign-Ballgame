@@ -14,6 +14,7 @@ signal grid_apply_requested(width: int, height: int, kill_row: int, spawn_row: i
 const MARGIN := 36
 const BUTTON_HEIGHT := 76.0
 const BUTTON_FONT_SIZE := 32
+const CHIP_FONT_SIZE := 22
 const LABEL_FONT_SIZE := 24
 const HEADER_FONT_SIZE := 48
 const SUBHEADER_FONT_SIZE := 28
@@ -26,7 +27,9 @@ var _debug_page: Control
 var _skins_page: Control
 var _current_page: Control
 
-var _debug_check: CheckBox
+var _debug_toggle: Button
+var _debug_explainer: Label
+var _invincible_toggle: Button
 var _width_box: SpinBox
 var _height_box: SpinBox
 var _kill_box: SpinBox
@@ -35,19 +38,16 @@ var _frag_cols_min: SpinBox
 var _frag_cols_max: SpinBox
 var _frag_rows_min: SpinBox
 var _frag_rows_max: SpinBox
-var _return_mode_label: Label
+var _return_mode_option: OptionButton
 
 var _ui_scale_slider: HSlider
 var _shake_slider: HSlider
 var _sfx_slider: HSlider
 var _music_slider: HSlider
-var _grid_check: CheckBox
+var _grid_toggle: Button
 var _grid_thickness_slider: HSlider
 
-var _ball_skin_label: Label
-var _background_skin_label: Label
-var _block_skin_label: Label
-var _launcher_skin_label: Label
+const DEBUG_EXPLAINER_TEXT := "While on: click/tap a block for 1 damage, Shift+click or a two-finger tap destroys it outright. ↑↓ change ball count, Shift+↑↓ shifts the whole field up/down a row. ←→ (held) move the shooter, Shift+←→ changes the level. Row-clear buttons and a hold-to-clear-all button appear over the playfield during play."
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -55,9 +55,7 @@ func _ready() -> void:
 	_game = get_parent() as Game
 	_build_ui()
 	Settings.changed.connect(_apply_ui_scale)
-	Skins.changed.connect(_sync_skin_labels)
 	_apply_ui_scale()
-	_sync_skin_labels()
 	visible = false
 	_show_page(_root_page)
 
@@ -95,7 +93,9 @@ func _show_page(page: Control) -> void:
 	_skins_page.visible = page == _skins_page
 
 func _sync_fields() -> void:
-	_debug_check.button_pressed = Debug.enabled
+	_debug_toggle.button_pressed = Debug.enabled
+	_debug_explainer.visible = Debug.enabled
+	_invincible_toggle.button_pressed = Debug.invincible
 	_width_box.value = _game.rules.grid_width
 	_height_box.value = _game.rules.grid_height
 	_kill_box.value = _game.rules.death_row()
@@ -104,20 +104,13 @@ func _sync_fields() -> void:
 	_frag_cols_max.value = _game.rules.fragment_cols_max
 	_frag_rows_min.value = _game.rules.fragment_rows_min
 	_frag_rows_max.value = _game.rules.fragment_rows_max
+	_return_mode_option.select(Skins.return_mode)
 	_ui_scale_slider.value = Settings.ui_scale * 100.0
 	_shake_slider.value = Settings.screen_shake_strength * 100.0
 	_sfx_slider.value = Settings.sfx_volume * 100.0
 	_music_slider.value = Settings.music_volume * 100.0
-	_grid_check.button_pressed = Settings.show_background_grid
+	_grid_toggle.button_pressed = Settings.show_background_grid
 	_grid_thickness_slider.value = Settings.grid_line_thickness
-	_sync_skin_labels()
-
-func _sync_skin_labels() -> void:
-	_ball_skin_label.text = "Ball: %s" % Skins.ball().skin_name
-	_background_skin_label.text = "Background: %s" % Skins.background().skin_name
-	_block_skin_label.text = "Block: %s" % Skins.block().skin_name
-	_launcher_skin_label.text = "Launcher: %s" % Skins.launcher().skin_name
-	_return_mode_label.text = "Ball return: %s" % Skins.return_mode_name()
 
 func _on_apply_grid() -> void:
 	grid_apply_requested.emit(int(_width_box.value), int(_height_box.value), int(_kill_box.value), int(_spawn_box.value))
@@ -200,14 +193,13 @@ func _build_root_page() -> VBoxContainer:
 	col.add_child(debug_btn)
 
 	var skins_btn := _button("Skins")
-	skins_btn.pressed.connect(func() -> void:
-		_sync_skin_labels()
-		_show_page(_skins_page))
+	skins_btn.pressed.connect(func() -> void: _show_page(_skins_page))
 	col.add_child(skins_btn)
 
 	var menu_btn := _button("Main menu")
-	menu_btn.disabled = true
-	menu_btn.tooltip_text = "Stub -- there is no main menu scene yet."
+	menu_btn.pressed.connect(func() -> void:
+		get_tree().paused = false
+		get_tree().change_scene_to_file("res://scenes/main_menu.tscn"))
 	col.add_child(menu_btn)
 
 	return col
@@ -228,11 +220,9 @@ func _build_settings_page() -> VBoxContainer:
 	_music_slider = _labeled_slider(col, "Music volume", 0.0, 100.0)
 	_music_slider.value_changed.connect(func(v: float) -> void: Settings.set_music_volume(v / 100.0))
 
-	_grid_check = CheckBox.new()
-	_grid_check.text = "Show background grid"
-	_grid_check.add_theme_font_size_override("font_size", LABEL_FONT_SIZE)
-	_grid_check.toggled.connect(func(pressed: bool) -> void: Settings.set_show_background_grid(pressed))
-	col.add_child(_grid_check)
+	_grid_toggle = _toggle_button("Show background grid")
+	_grid_toggle.toggled.connect(func(pressed: bool) -> void: Settings.set_show_background_grid(pressed))
+	col.add_child(_grid_toggle)
 
 	_grid_thickness_slider = _labeled_slider(col, "Background grid line thickness", 0.5, 4.0)
 	_grid_thickness_slider.step = 0.5
@@ -244,19 +234,27 @@ func _build_settings_page() -> VBoxContainer:
 func _build_skins_page() -> VBoxContainer:
 	var col := _page_column()
 	col.add_child(_header("SKINS"))
-	col.add_child(_label("Test swatches, not persisted -- session only.", LABEL_FONT_SIZE))
+	col.add_child(_label("Test swatches, not persisted -- session only. Click one to select it.", LABEL_FONT_SIZE))
 
-	_ball_skin_label = _label("Ball: ?", LABEL_FONT_SIZE)
-	col.add_child(_skin_preview_row(_ball_preview(), _ball_skin_label, func() -> void: Skins.cycle_ball()))
+	var ball_names: Array = Skins.ball_skins.map(func(s: Skins.BallSkin) -> String: return s.skin_name)
+	col.add_child(_skin_category(_ball_preview(), "Ball", ball_names,
+		func() -> int: return Skins.ball_index,
+		func(i: int) -> void: Skins.set_ball(i)))
 
-	_background_skin_label = _label("Background: ?", LABEL_FONT_SIZE)
-	col.add_child(_skin_preview_row(_background_preview(), _background_skin_label, func() -> void: Skins.cycle_background()))
+	var bg_names: Array = Skins.background_skins.map(func(s: Skins.BackgroundSkin) -> String: return s.skin_name)
+	col.add_child(_skin_category(_background_preview(), "Background", bg_names,
+		func() -> int: return Skins.background_index,
+		func(i: int) -> void: Skins.set_background(i)))
 
-	_block_skin_label = _label("Block: ?", LABEL_FONT_SIZE)
-	col.add_child(_skin_preview_row(_block_preview(), _block_skin_label, func() -> void: Skins.cycle_block()))
+	var block_names: Array = Skins.block_skins.map(func(s: Skins.BlockSkin) -> String: return s.skin_name)
+	col.add_child(_skin_category(_block_preview(), "Block", block_names,
+		func() -> int: return Skins.block_index,
+		func(i: int) -> void: Skins.set_block(i)))
 
-	_launcher_skin_label = _label("Launcher: ?", LABEL_FONT_SIZE)
-	col.add_child(_skin_preview_row(_launcher_preview(), _launcher_skin_label, func() -> void: Skins.cycle_launcher()))
+	var launcher_names: Array = Skins.launcher_skins.map(func(s: Skins.LauncherSkin) -> String: return s.skin_name)
+	col.add_child(_skin_category(_launcher_preview(), "Launcher", launcher_names,
+		func() -> int: return Skins.launcher_index,
+		func(i: int) -> void: Skins.set_launcher(i)))
 
 	col.add_child(_back_button(_root_page))
 	return col
@@ -265,11 +263,20 @@ func _build_debug_page() -> VBoxContainer:
 	var col := _page_column()
 	col.add_child(_header("DEBUG MENU"))
 
-	_debug_check = CheckBox.new()
-	_debug_check.text = "Enable debug mode"
-	_debug_check.add_theme_font_size_override("font_size", LABEL_FONT_SIZE)
-	_debug_check.toggled.connect(func(pressed: bool) -> void: Debug.enabled = pressed)
-	col.add_child(_debug_check)
+	_debug_toggle = _toggle_button("Enable debug mode")
+	_debug_toggle.toggled.connect(func(pressed: bool) -> void:
+		Debug.enabled = pressed
+		_debug_explainer.visible = pressed)
+	col.add_child(_debug_toggle)
+
+	_debug_explainer = _label(DEBUG_EXPLAINER_TEXT, 20)
+	_debug_explainer.add_theme_color_override("font_color", Palette.TEXT_DIM)
+	_debug_explainer.visible = false
+	col.add_child(_debug_explainer)
+
+	_invincible_toggle = _toggle_button("Invincible (auto-clear a lethal row)")
+	_invincible_toggle.toggled.connect(func(pressed: bool) -> void: Debug.invincible = pressed)
+	col.add_child(_invincible_toggle)
 
 	col.add_child(_label("Change game mods", SUBHEADER_FONT_SIZE))
 	var mods_btn := _button("Mods...")
@@ -278,14 +285,14 @@ func _build_debug_page() -> VBoxContainer:
 	col.add_child(mods_btn)
 
 	col.add_child(_label("Ball return behaviour", SUBHEADER_FONT_SIZE))
-	_return_mode_label = _label("Ball return: ?", LABEL_FONT_SIZE)
-	var return_row := HBoxContainer.new()
-	return_row.add_theme_constant_override("separation", 16)
-	return_row.add_child(_return_mode_label)
-	var return_cycle := _button("Cycle")
-	return_cycle.pressed.connect(func() -> void: Skins.cycle_return_mode())
-	return_row.add_child(return_cycle)
-	col.add_child(return_row)
+	_return_mode_option = OptionButton.new()
+	_return_mode_option.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
+	_return_mode_option.add_theme_font_size_override("font_size", LABEL_FONT_SIZE)
+	for mode in range(Skins.ReturnMode.size()):
+		_return_mode_option.add_item(Skins.RETURN_MODE_NAMES[mode], mode)
+	_return_mode_option.item_selected.connect(func(index: int) -> void:
+		Skins.set_return_mode(_return_mode_option.get_item_id(index) as Skins.ReturnMode))
+	col.add_child(_return_mode_option)
 
 	col.add_child(_label("Destroy fragments", SUBHEADER_FONT_SIZE))
 	var frag_row := HBoxContainer.new()
@@ -363,7 +370,7 @@ func _button_style(bg: Color) -> StyleBoxFlat:
 	return sb
 
 ## `primary` (Resume) gets an accent colour so the root page reads as one
-## obvious default action plus three secondary ones, not four equal buttons.
+## obvious default action plus several secondary ones, not equal buttons.
 func _button(text: String, primary: bool = false) -> Button:
 	var b := Button.new()
 	b.text = text
@@ -376,6 +383,42 @@ func _button(text: String, primary: bool = false) -> Button:
 	b.add_theme_stylebox_override("disabled", _button_style(base.darkened(0.5)))
 	b.add_theme_color_override("font_color", Palette.TEXT)
 	b.add_theme_color_override("font_disabled_color", Palette.TEXT_DIM)
+	return b
+
+## A big on/off button standing in for a checkbox -- the stock CheckBox's
+## tick glyph doesn't scale with font size, so "bigger checkbox" meant a
+## different control, not a themed one. Green when on, matching the toggle
+## buttons elsewhere reading as state, not navigation.
+func _toggle_button(text: String) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.toggle_mode = true
+	b.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
+	b.add_theme_font_size_override("font_size", BUTTON_FONT_SIZE)
+	var off := Color("#2b3442")
+	var on := Color("#16a34a")
+	b.add_theme_stylebox_override("normal", _button_style(off))
+	b.add_theme_stylebox_override("hover", _button_style(off.lightened(0.15)))
+	b.add_theme_stylebox_override("pressed", _button_style(on))
+	b.add_theme_stylebox_override("hover_pressed", _button_style(on.lightened(0.1)))
+	b.add_theme_color_override("font_color", Palette.TEXT)
+	return b
+
+## Small toggle-style chip, for one option in a _skin_category row. Same
+## on/off colours as _toggle_button but compact -- several sit in one row.
+func _chip_button(text: String) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.toggle_mode = true
+	b.custom_minimum_size = Vector2(0.0, 56.0)
+	b.add_theme_font_size_override("font_size", CHIP_FONT_SIZE)
+	var off := Color("#2b3442")
+	var on := Color("#3949ab")
+	b.add_theme_stylebox_override("normal", _button_style(off))
+	b.add_theme_stylebox_override("hover", _button_style(off.lightened(0.15)))
+	b.add_theme_stylebox_override("pressed", _button_style(on))
+	b.add_theme_stylebox_override("hover_pressed", _button_style(on.lightened(0.1)))
+	b.add_theme_color_override("font_color", Palette.TEXT)
 	return b
 
 func _back_button(target: Control) -> Button:
@@ -398,18 +441,37 @@ func _labeled(control: Control, caption: String) -> VBoxContainer:
 	v.add_child(control)
 	return v
 
-## A visual preview, its name label, and a "Cycle" button, stacked as one row.
-func _skin_preview_row(preview: Control, name_label: Label, on_cycle: Callable) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 20)
-	row.add_child(preview)
-	name_label.custom_minimum_size = Vector2(260.0, 0.0)
-	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	row.add_child(name_label)
-	var btn := _button("Cycle")
-	btn.pressed.connect(on_cycle)
-	row.add_child(btn)
-	return row
+## A preview swatch, a title, and one chip button per option (radio-style,
+## via ButtonGroup) -- clicking a chip jumps straight to that option, rather
+## than only stepping through them one at a time with a single Cycle button.
+func _skin_category(preview: Control, title: String, names: Array, get_index: Callable, on_select: Callable) -> VBoxContainer:
+	var wrap := VBoxContainer.new()
+	wrap.add_theme_constant_override("separation", 10)
+
+	var header_row := HBoxContainer.new()
+	header_row.add_theme_constant_override("separation", 16)
+	header_row.add_child(preview)
+	header_row.add_child(_label(title, SUBHEADER_FONT_SIZE))
+	wrap.add_child(header_row)
+
+	var group := ButtonGroup.new()
+	var chips := HFlowContainer.new()
+	chips.add_theme_constant_override("h_separation", 10)
+	chips.add_theme_constant_override("v_separation", 10)
+	var buttons: Array[Button] = []
+	for i in range(names.size()):
+		var btn := _chip_button(str(names[i]))
+		btn.button_group = group
+		btn.button_pressed = i == get_index.call()
+		btn.pressed.connect(func() -> void: on_select.call(i))
+		chips.add_child(btn)
+		buttons.append(btn)
+	Skins.changed.connect(func() -> void:
+		var idx: int = get_index.call()
+		for i in range(buttons.size()):
+			buttons[i].button_pressed = i == idx)
+	wrap.add_child(chips)
+	return wrap
 
 ## A caption label + HSlider pair, added to `col`; returns the slider so the
 ## caller wires its own value_changed.
@@ -427,8 +489,8 @@ func _labeled_slider(col: VBoxContainer, caption: String, lo: float, hi: float) 
 
 # ------------------------------------------------------------- skin previews
 # Each is a plain Control drawn via its own `draw` signal rather than a
-## dedicated script -- there's nothing here that needs its own class, just a
-## few pixels reacting to Skins.changed.
+# dedicated script -- there's nothing here that needs its own class, just a
+# few pixels reacting to Skins.changed.
 
 func _ball_preview() -> Control:
 	var size := Vector2(64.0, 64.0)

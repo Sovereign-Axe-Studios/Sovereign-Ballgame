@@ -159,7 +159,15 @@ func advance() -> bool:
 			n.grid_row = row
 			_slide(n, col, row)
 			if row >= death and n is Block:
-				lost = true
+				if Debug.invincible:
+					# Destroy it (through the normal Block.hit path, so the
+					# usual destroy fragments/signals still fire) instead of
+					# ending the run.
+					var block := n as Block
+					cells[row][col] = null
+					block.hit(block.value)
+				else:
+					lost = true
 	return lost
 
 ## Debug helper: pull the field back up one row.

@@ -182,7 +182,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			shooter.aim_at(get_global_mouse_position())
 		elif _dragging:
 			_dragging = false
-			_begin_firing()
+			# A release past the allowed aim range cancels the shot instead
+			# of firing at the clamped angle -- an overdrag reads as "changed
+			# my mind", not "fire sideways".
+			var raw := shooter.raw_aim_degrees(get_global_mouse_position())
+			if absf(raw) <= rules.max_aim_degrees:
+				_begin_firing()
 	elif event is InputEventMouseMotion and _dragging:
 		shooter.aim_at(get_global_mouse_position())
 
@@ -198,8 +203,10 @@ func _begin_firing() -> void:
 	_line_up_count = 0
 	round_damage = 0
 	_fire_origin = shooter.global_position
-	shooter.active = false
-	shooter.queue_redraw()
+	# Deliberately NOT shooter.active = false -- it keeps showing the aim line
+	# at the angle it just fired, so it reads as "pointing where it last
+	# shot" rather than going dark. Input is already gated by `state`, not by
+	# `active`, so this doesn't let the player re-aim mid-round.
 	_refresh_hud()
 
 func _tick_firing(delta: float) -> void:

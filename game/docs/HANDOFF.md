@@ -71,16 +71,19 @@ that can end a round, and it does so on `_to_fire <= 0 and _live_balls <= 0`.
 | `scripts/shooter.gd` | `Shooter` — the aim line | 0 deg is straight up, positive is to the right |
 | `scripts/hud.gd` | `HUD` — four counters + game over | Labels live in `main.tscn` under `HUD/Root` |
 | `scripts/palette.gd` | Shared colours, ROYGBIV health ramp | `Palette.health_color(value, max_value = 100)` |
-| `scripts/debug_state.gd` | `Debug` autoload — the debug-mode flag | Session-only; survives a scene reload on purpose. See §9. |
+| `scripts/debug_state.gd` | `Debug` autoload — the debug-mode flag + `invincible` | Session-only; survives a scene reload on purpose. `invincible` is independent of `enabled` — see §13. |
 | `scripts/settings_state.gd` | `Settings` autoload — persisted user prefs | UI scale, screen shake strength, SFX/music volume, background-grid toggle. Saved to `user://settings.cfg` on every change. |
 | `scripts/skins.gd` | `Skins` autoload — ball/background/block/launcher visuals + `ReturnMode` | Session-only (like `Debug`, not `Settings`). `Palette.health_color()` reads `Skins.block().ramp`. See §10, §11. |
 | `scripts/vfx/block_chunk.gd`, `block_fragment.gd` | Hit chunks / destroy fragments | `.new()` + `setup()`, no scene. Fragment piece count is `GameRules.fragment_cols/rows_min/max`. See §10, §11. |
 | `scripts/falling_ball.gd` | `FallingBall` — the +1 ball pickup's cosmetic drop | Reports `landed`; `Game` only increments `pending_balls` on that signal. See §10. |
-| `scripts/ui/pause_menu.gd` | `PauseMenu` — 4 pages: root (Resume/Settings/Debug Menu/Skins/Main menu), Settings, Skins, Debug Menu | Built in code, not `.tscn`; `process_mode = ALWAYS` so it works while paused. `Esc` backs out of a sub-page before it closes the menu. See §9, §11. |
+| `scripts/ui/pause_menu.gd` | `PauseMenu` — 4 pages: root (Resume/Settings/Debug Menu/Skins/Main menu), Settings, Skins, Debug Menu | Built in code, not `.tscn`; `process_mode = ALWAYS` so it works while paused. `Esc` backs out of a sub-page before it closes the menu. See §9, §11, §13. |
 | `scripts/ui/debug_overlay.gd` | `DebugOverlay` — row-clear buttons, hold-to-clear-all, on-screen D-pad, expected-count readouts | Visible only while `Debug.enabled`. See §9. |
+| `scripts/main_menu.gd` | `MainMenu` — title screen | `run/main_scene`. Play/Settings/States(stub)/Asset Viewer. See §13. |
+| `scripts/asset_viewer.gd` | `AssetViewer` — tabbed Skins/Modes/Audio browser | Separate scene, not an overlay. See §13. |
 
-Scenes are deliberately thin. `main.tscn` is `Main` (Game) with five children:
-`Walls`, `Grid`, `Balls`, `Shooter`, `HUD`. `ball/block/pickup.tscn` each carry a
+Scenes are deliberately thin. `main.tscn` is `Main` (Game) with eight
+children: `Walls`, `Grid`, `Balls`, `Effects`, `Shooter`, `HUD`,
+`DebugOverlay`, `PauseMenu`. `ball/block/pickup.tscn` each carry a
 placeholder shape that the owning script replaces in `setup()` / `launch()`.
 
 ### Key signatures
@@ -558,7 +561,105 @@ cycling moved off the Debug Menu onto its own page, each with a small
 
 ---
 
-## 12. Loose ends
+## 12. Title screen, invincible, overdrag-cancel, chip pickers
+
+### `run/main_scene` is the title screen now
+
+`scenes/main_menu.tscn` (`MainMenu`) replaces `scenes/main.tscn` as the
+project's entry point. **Play** -> `get_tree().change_scene_to_file(
+"res://scenes/main.tscn")`. **Settings** is an in-place overlay, same
+controls as the pause menu's Settings page (deliberately duplicated rather
+than shared -- see "known duplication" below). **States** is a stub (no
+save-state system exists -- matches the Debug Menu's own "Save game state"
+stub). **Asset Viewer** -> `scenes/asset_viewer.tscn`, a separate scene
+(`change_scene_to_file`, not an overlay), since it's a full browsing screen.
+The pause menu's **Main menu** button now actually works (`change_scene_to_
+file` back to `main_menu.tscn`), no longer a stub.
+
+Background is procedural: `MainMenu._draw()` paints a starfield (`STAR_COUNT`
+dots, twinkling via a sine wave) and a few large, very dim, slowly-rotating
+squares tinted with the active block skin's ramp -- a nod to what the game
+is about without needing image assets or reusing another Sovereign Axe
+title's specific art. Buttons are sharp-cornered with a neon border
+(`_arcade_style`), a different look from the pause menu's rounded buttons on
+purpose -- the title screen should read as its own place.
+
+**Known duplication:** the Settings controls (UI scale, shake, SFX/music
+volume, background grid + thickness) are built twice -- once in
+`PauseMenu._build_settings_page`, once in `MainMenu._build_settings_overlay`
+-- rather than through a shared component. Small enough (~20 lines) that
+extracting a `SettingsPanel` builder wasn't worth it this pass, but it's the
+one place a future settings addition needs to be added twice.
+
+### Asset Viewer tabs
+
+`TabContainer` with three tabs, each showing what the project actually
+contains rather than placeholder rows for a richer reference screen's
+categories (ships, bosses, weapons -- none of which have an equivalent
+here): **Skins** (the exact same chip-picker as the pause menu's Skins page,
+rebuilt here rather than shared -- see the duplication note above),
+**Modes** (the `Skins.ReturnMode` dropdown + a Game Mods stub note),
+**Audio** (SFX/Music sliders + a note that no sound assets exist yet).
+
+### Skin pickers are chip buttons now, not a single Cycle button
+
+`PauseMenu._skin_category` / `AssetViewer._skin_category` (duplicated, same
+duplication note) build one small toggle-style button per option in a
+`ButtonGroup` (radio behaviour) inside an `HFlowContainer` (wraps to a new
+row rather than overflowing). Replaces the old single "Cycle" button +
+label, which had a real layout bug: the label had no minimum width, so
+`autowrap_mode` word-wrapped it one character per line and stretched the
+whole row absurdly tall -- exactly what happened to the Ball return
+behaviour row before it was fixed (see below). `Skins` gained direct-set
+`set_ball` / `set_background` / `set_block` / `set_launcher` /
+`set_return_mode` methods so a chip (or the dropdown) can jump straight to
+an option instead of only stepping forward.
+
+### Ball return behaviour is an `OptionButton` now
+
+Same root cause as the chip-button bug above, but for the Debug Menu's
+single return-mode row: `RETURN_MODE_NAMES` are full sentences, not short
+labels, so an unbounded label there wrapped catastrophically. Replaced with
+a native `OptionButton` (one item per `Skins.ReturnMode`, `id` == the enum
+value so `get_item_id` round-trips cleanly) -- a dropdown reads better than
+a wrapping chip row for five long, mutually-exclusive descriptions.
+
+### Bigger toggles, with an explainer
+
+`PauseMenu._toggle_button` replaces the stock `CheckBox` for **Enable debug
+mode**, **Invincible**, and **Show background grid** -- a full `Button` with
+`toggle_mode = true` and its own on/off `StyleBoxFlat`s (green when on),
+since the stock checkbox's tick glyph doesn't scale with font size the way
+everything else on these pages now does. `_debug_explainer` is a dimmed,
+autowrapping label that appears under **Enable debug mode** only while it's
+on, spelling out what clicking a block, the arrows, and Shift do -- see
+`DEBUG_EXPLAINER_TEXT`.
+
+### Invincible
+
+`Debug.invincible` (independent of `Debug.enabled` -- it's its own testing
+safety net, not part of the enable-debug-mode feature set). `GridManager.
+advance()` checks it at the exact point it would otherwise set `lost = true`:
+if on, the Block that reached the death row is destroyed via `Block.hit(
+block.value)` (so the usual destroy-fragment VFX and signals still fire)
+instead of ending the run. Destroys the offending block(s), not "the whole
+row" literally -- re-check with Theo if a full-row clear was actually meant.
+
+### Shooter stays "active" through FIRING; overdrag cancels the shot
+
+`Game._begin_firing` no longer sets `shooter.active = false` -- the aim line
+now stays visible, frozen at the angle just fired, instead of dimming and
+hiding until the round resolves. Input was already gated by `Game.state`,
+never by `shooter.active`, so this doesn't reopen aiming mid-round.
+`Shooter.raw_aim_degrees` (new) returns the UNCLAMPED angle to a point;
+`Game._unhandled_input`'s release handler checks it against the same
+`rules.max_aim_degrees` the clamp already uses, and skips `_begin_firing`
+if it's over -- an overdrag reads as "changed my mind" rather than "fire at
+the clamped edge angle".
+
+---
+
+## 13. Loose ends
 
 - `icon.svg` is a placeholder. Six neon candidates are in `branding/icons/`;
   Theo picks one and it gets copied over `icon.svg`. Until then the icon is
@@ -576,3 +677,8 @@ cycling moved off the Debug Menu onto its own page, each with a small
 - "Skins" so far are recolours (§10), not asset-based skins -- there is no
   art pipeline, and no SFX exist at all (impact VFX are done, impact SFX are
   not -- the "SFX" audio bus is real, nothing plays through it yet).
+- **States** (title screen button) is a stub, same reasoning as the Debug
+  Menu's Save game state stub -- no save-state system exists to browse.
+- The Settings controls are duplicated across `PauseMenu` and `MainMenu`
+  (see §12) rather than shared. Fine at the current size; revisit if a third
+  copy is ever needed.

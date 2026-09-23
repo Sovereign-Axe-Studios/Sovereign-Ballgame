@@ -123,21 +123,38 @@ func return_mode_name() -> String:
 	return RETURN_MODE_NAMES[return_mode]
 
 func cycle_ball() -> void:
-	ball_index = (ball_index + 1) % ball_skins.size()
-	changed.emit()
+	set_ball(ball_index + 1)
 
 func cycle_background() -> void:
-	background_index = (background_index + 1) % background_skins.size()
-	changed.emit()
+	set_background(background_index + 1)
 
 func cycle_block() -> void:
-	block_index = (block_index + 1) % block_skins.size()
-	changed.emit()
+	set_block(block_index + 1)
 
 func cycle_launcher() -> void:
-	launcher_index = (launcher_index + 1) % launcher_skins.size()
-	changed.emit()
+	set_launcher(launcher_index + 1)
 
 func cycle_return_mode() -> void:
-	return_mode = ((return_mode + 1) % ReturnMode.size()) as ReturnMode
+	set_return_mode(((return_mode + 1) % ReturnMode.size()) as ReturnMode)
+
+## Direct-selection setters -- the Skins page picks a specific swatch by its
+## own button rather than only stepping through them one at a time.
+func set_ball(index: int) -> void:
+	ball_index = posmod(index, ball_skins.size())
+	changed.emit()
+
+func set_background(index: int) -> void:
+	background_index = posmod(index, background_skins.size())
+	changed.emit()
+
+func set_block(index: int) -> void:
+	block_index = posmod(index, block_skins.size())
+	changed.emit()
+
+func set_launcher(index: int) -> void:
+	launcher_index = posmod(index, launcher_skins.size())
+	changed.emit()
+
+func set_return_mode(mode: ReturnMode) -> void:
+	return_mode = mode
 	changed.emit()

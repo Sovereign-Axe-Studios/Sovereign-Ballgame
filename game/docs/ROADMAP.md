@@ -58,11 +58,17 @@
 - [x] Round advances once every ball is down
 - [x] Debug lose message when a block reaches the bottom row
 - [x] Game over overlay, `R` to restart
+- [x] Invincible debug toggle: a Block landing in the death row is destroyed
+      instead of ending the run (`Debug.invincible`, `GridManager.advance`)
 
 ## Drag integration  ← next
-- [~] Mouse drag sets shooting direction (press, drag, release fires)
+- [~] Mouse drag sets shooting direction (press, drag, release fires); a
+      release past `max_aim_degrees` cancels the shot instead of firing at
+      the clamped angle
 - [ ] Click shooter to focus, then click elsewhere to shoot
 - [ ] Dynamic predicted-bounce line while dragging
+- [x] The shooter keeps showing its aim line through FIRING (pointed at the
+      last shot), instead of dimming/hiding until the round resolves
 
 ## Modularity basics
 - [~] `GameRules` resource holds every value; `row_budget`, `cell_cap` and
@@ -81,7 +87,11 @@
       `expand`, so this is mostly HUD anchoring)
 
 ## Unscheduled
-- [ ] Title screen
+- [x] Title screen (`scenes/main_menu.tscn`: Play / Settings / States (stub)
+      / Asset Viewer, arcade-styled, procedural starfield background) ·
+- [x] Asset Viewer (`scenes/asset_viewer.tscn`): tabbed Skins / Modes / Audio,
+      showing what the project actually has, not padded with placeholders
+      for content (ships, bosses, etc.) that has no equivalent here
 - [~] Mod menu (stub button on the Debug Menu page only, no mod list yet) ·
       settings ([x] UI scale, SFX/music volume — no sounds routed yet;
       screen shake strength plumbed, unconsumed; [x] debug menu)

@@ -16,3 +16,10 @@ var enabled: bool = false:
 			return
 		enabled = value
 		enabled_changed.emit(value)
+
+## When true, GridManager.advance() destroys a Block that would land in the
+## death row instead of reporting a loss -- a safety net for testing rounds
+## deep into a run without actually dying. Independent of `enabled`: it's a
+## debug-menu toggle either way, but doesn't need the full debug feature set
+## switched on to make sense on its own.
+var invincible: bool = false

@@ -13,8 +13,21 @@ Picking this up mid-stream? Start with [docs/HANDOFF.md](docs/HANDOFF.md).
 
 ## Running it
 
-Open `game/project.godot` in Godot 4.7 and press F5. `scenes/main.tscn` is the
-main scene.
+Open `game/project.godot` in Godot 4.7 and press F5. `scenes/main_menu.tscn`
+is the entry point (**Play** loads `scenes/main.tscn`, the actual game).
+
+## Title screen
+
+Play / Settings / States (stub -- no save-state system yet) / Asset Viewer,
+arcade-styled (sharp corners, neon borders, a procedural starfield + a few
+huge dim rotating squares in the current block skin's colours -- no image
+assets). Settings here is the same controls as the pause menu's Settings
+page, as an in-place overlay. **Asset Viewer** (`scenes/asset_viewer.tscn`)
+is a separate, tabbed browsing screen -- Skins (the same chip-picker as the
+pause menu's Skins page), Modes (ball-return behaviour + a Game Mods stub),
+Audio (SFX/Music volume) -- showing what the project actually has, not
+padded out with placeholder rows for content (ships, bosses, weapons...)
+that has no equivalent in a brick breaker.
 
 ## Controls
 
@@ -29,11 +42,17 @@ main scene.
 `←` `→` `↑` `↓` are reserved for the debug menu (see below), not aiming --
 that's deliberately A/D-only now so the two don't fight over the same keys.
 
+Releasing a drag past `max_aim_degrees` cancels the shot instead of firing at
+the clamped angle -- an overdrag reads as "changed my mind", not "fire
+sideways". The shooter keeps showing its aim line through the whole FIRING
+phase now too (pointed at the angle it just fired), rather than dimming and
+hiding it until the round resolves.
+
 ## Pause menu
 
 `Esc` opens the pause menu: **Resume**, **Settings**, **Debug Menu**,
-**Skins**, **Main menu** (stub -- no main menu scene exists yet). The latter
-three each open their own page, with a **Back** button (or `Esc` again) to
+**Skins**, **Main menu** (returns to the title screen). The latter three
+each open their own page, with a **Back** button (or `Esc` again) to
 return to root -- `Esc` only closes the whole menu from the root page itself.
 
 ### Settings
@@ -50,15 +69,20 @@ via the `Settings` autoload.
 
 ### Skins
 
-Visual swatches with a live preview, each with its own **Cycle** button:
-ball colour, background colour, block health-ramp, and launcher shape (a
-plain ball, or a simple vector cannon -- proof that the launcher itself is a
-skin category, not just the ball's colour). Session-only, not persisted --
-these are dev test swatches (no art assets exist), not shipped content.
+Visual swatches with a live preview and one chip button per option (click
+any option to jump straight to it, not just cycle forward): ball colour,
+background colour, block health-ramp, and launcher shape (a plain ball, or a
+simple vector cannon -- proof that the launcher itself is a skin category,
+not just the ball's colour). Session-only, not persisted -- these are dev
+test swatches (no art assets exist), not shipped content. The Asset Viewer's
+Skins tab (see Title screen above) is the exact same picker.
 
 ### Debug menu
 
-The Debug Menu page has an **Enable debug mode** checkbox. While it's on:
+The Debug Menu page has an **Enable debug mode** toggle (a big on/off button,
+not a stock checkbox -- the checkbox's own tick glyph doesn't scale with
+font size) with an explainer that appears under it, spelling out what's
+below, while it's on:
 
 | Input | Action |
 | --- | --- |
@@ -76,11 +100,15 @@ mouse), a `+`-shaped D-pad does the same four directions, with a center toggle
 button standing in for holding Shift; a button next to each row clears it, and
 a bottom-left hold-to-fill button clears the whole field.
 
-The Debug Menu page also has: a **Ball return behaviour** cycle (see Visual
-feedback below), **Destroy fragments** cols/rows min/max fields, grid
-width/height/kill-row/spawn-row fields (Apply resets the board), a game-mods
-stub, a save-game-state stub, and **Restart** (moved here rather than the
-pause-menu root, to match the button spec).
+The Debug Menu page also has: an **Invincible** toggle (a Block reaching the
+death row is destroyed instead of ending the run -- a safety net for testing
+deep rounds without actually dying), a **Ball return behaviour** dropdown
+(see Visual feedback below -- a dropdown rather than a cycle button because
+the five option names are full sentences, not short labels), **Destroy
+fragments** cols/rows min/max fields, grid width/height/kill-row/spawn-row
+fields (Apply resets the board), a game-mods stub, a save-game-state stub,
+and **Restart** (moved here rather than the pause-menu root, to match the
+button spec).
 
 The on-screen D-pad and two-finger-tap gesture are unverified on real touch
 hardware -- there's no Android/touch build yet (see ROADMAP.md).
@@ -159,18 +187,21 @@ game/
   branding/icons/      six neon icon options, one to be chosen
   docs/HANDOFF.md      current state, data model, next tasks
   docs/ROADMAP.md      build order, with what is done marked
-  scenes/              main, ball, block, pickup
+  scenes/              main (the game), main_menu, asset_viewer, ball, block, pickup
   audio/bus_layout.tres  Master -> Music, SFX buses (no sounds routed yet)
   scripts/
+    main_menu.gd       title screen: Play/Settings/States(stub)/Asset Viewer
+    asset_viewer.gd    tabbed browser: Skins / Modes / Audio
     cfg.gd             Cfg autoload -- thin index over scripts/config/*.gd
     config/            the numbers, one small file per domain (incl. juice.gd:
                        fragment cols/rows min/max)
-    debug_state.gd     Debug autoload -- the debug-mode on/off flag
+    debug_state.gd     Debug autoload -- debug-mode flag + invincible toggle
     settings_state.gd  Settings autoload -- persisted user prefs
-    skins.gd           Skins autoload -- ball/background/block test swatches
+    skins.gd           Skins autoload -- ball/background/block/launcher test
+                       swatches + ball-return-mode variants
     falling_ball.gd    the +1 ball pickup's cosmetic drop-to-floor
     vfx/               hit chunks + destroy fragments (no scene, built in code)
-    ui/pause_menu.gd   pause menu pages: root, Settings, Debug Menu
+    ui/pause_menu.gd   pause menu pages: root, Settings, Debug Menu, Skins
     ui/debug_overlay.gd  row-clear buttons, clear-all, on-screen D-pad
     game.gd            round loop, playfield construction, scoring
     game_rules.gd      every tunable number (defaults from Cfg) + the mod hooks
