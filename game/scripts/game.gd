@@ -12,6 +12,8 @@ const DEBUG_MOVE_SPEED := 700.0 ## px/sec for the debug left/right launch-positi
 const SHOOTER_SLIDE_DURATION := 0.28
 const BALL_RETURN_MIN_DURATION := 0.32
 const BALL_RETURN_MAX_DURATION := 0.5
+const BALL_RETURN_STAGGER := 0.08 ## per-ball delay step for the ordered/random Stick variants.
+const LINE_UP_SPACING := 50.0
 
 ## Drop a .tres here to run the game under different rules. Empty = defaults.
 @export var rules: GameRules
@@ -48,7 +50,8 @@ var _play_left: float = 0.0
 var _play_right: float = 0.0
 var _dragging: bool = false
 var _debug_touches: Dictionary = {} ## touch index -> screen position, for the two-finger-tap destroy gesture.
-var _landed_balls: Array[Ball] = [] ## finished but not yet freed -- gathered to the new launch spot in _end_round.
+var _landed_balls: Array[Ball] = [] ## Stick modes only -- finished but not yet freed, gathered in _end_round.
+var _line_up_count: int = 0 ## reset each round; LINE_UP mode's next-slot counter.
 
 
 func _ready() -> void:
@@ -192,6 +195,7 @@ func _begin_firing() -> void:
 	_fire_cd = 0.0
 	_live_balls = 0
 	_has_landing = false
+	_line_up_count = 0
 	round_damage = 0
 	_fire_origin = shooter.global_position
 	shooter.active = false
@@ -225,11 +229,38 @@ func _on_ball_finished(ball: Ball) -> void:
 			_play_left + rules.ball_radius,
 			_play_right - rules.ball_radius
 		)
-	# Not freed here -- kept around and gathered to the new launch spot once
-	# _end_round knows where that is. See return_to() on Ball.
-	_landed_balls.append(ball)
+		# The shooter follows the FIRST ball home immediately, not at the end
+		# of the round -- the original waited for every ball to land first.
+		if rules.balls_return_to_lander:
+			shooter.slide_to_x(_landing_x, SHOOTER_SLIDE_DURATION)
+
+	match Skins.return_mode:
+		Skins.ReturnMode.MOVE_TO_SHOOTER:
+			ball.return_to(_launch_target(), randf_range(BALL_RETURN_MIN_DURATION, BALL_RETURN_MAX_DURATION))
+		Skins.ReturnMode.LINE_UP:
+			ball.return_to(_next_line_up_slot(), randf_range(BALL_RETURN_MIN_DURATION, BALL_RETURN_MAX_DURATION))
+		_:
+			# STICK_* -- frozen where it landed until _end_round moves it.
+			_landed_balls.append(ball)
+
 	if _to_fire <= 0 and _live_balls <= 0:
 		_end_round()
+
+## Where a gathering ball is headed: the shooter's X if balls_return_to_lander
+## is off or nothing has landed yet, otherwise the shared landing spot.
+func _launch_target() -> Vector2:
+	var x := shooter.position.x
+	if rules.balls_return_to_lander and _has_landing:
+		x = _landing_x
+	return Vector2(x, rules.floor_y - rules.shooter_height)
+
+## The next slot in LINE_UP mode's queue, in the strip below the floor line.
+func _next_line_up_slot() -> Vector2:
+	var slot := _line_up_count
+	_line_up_count += 1
+	var center_x := (_play_left + _play_right) * 0.5
+	var x := center_x + (float(slot) - float(ball_count - 1) * 0.5) * LINE_UP_SPACING
+	return Vector2(clampf(x, _play_left, _play_right), rules.floor_y + 40.0)
 
 func _on_block_damaged(block: Block, damage: int) -> void:
 	round_damage += damage
@@ -257,16 +288,27 @@ func _on_powerup_ball_landed(_ball: FallingBall) -> void:
 func _end_round() -> void:
 	state = State.RESOLVING
 
-	# The shooter follows the first ball home, the way the original does --
-	# now a slide rather than a snap, with every other landed ball gathered
-	# to the same spot along its own random arc rather than just vanishing.
-	var target := Vector2(shooter.position.x, rules.floor_y - rules.shooter_height)
-	if rules.balls_return_to_lander and _has_landing:
-		target.x = _landing_x
-		shooter.slide_to_x(target.x, SHOOTER_SLIDE_DURATION)
-	for ball in _landed_balls:
-		if is_instance_valid(ball):
-			ball.return_to(target, randf_range(BALL_RETURN_MIN_DURATION, BALL_RETURN_MAX_DURATION))
+	# MOVE_TO_SHOOTER / LINE_UP balls already started gathering the instant
+	# they landed (_on_ball_finished) -- _landed_balls only holds the STICK_*
+	# modes' balls, frozen where they landed until now.
+	var target := _launch_target()
+	match Skins.return_mode:
+		Skins.ReturnMode.STICK_ORDERED:
+			for i in range(_landed_balls.size()):
+				var ball := _landed_balls[i]
+				if is_instance_valid(ball):
+					ball.return_to(target, randf_range(BALL_RETURN_MIN_DURATION, BALL_RETURN_MAX_DURATION), i * BALL_RETURN_STAGGER)
+		Skins.ReturnMode.STICK_RANDOM:
+			var shuffled := _landed_balls.duplicate()
+			shuffled.shuffle()
+			for i in range(shuffled.size()):
+				var ball: Ball = shuffled[i]
+				if is_instance_valid(ball):
+					ball.return_to(target, randf_range(BALL_RETURN_MIN_DURATION, BALL_RETURN_MAX_DURATION), i * BALL_RETURN_STAGGER)
+		_:
+			for ball in _landed_balls:
+				if is_instance_valid(ball):
+					ball.return_to(target, randf_range(BALL_RETURN_MIN_DURATION, BALL_RETURN_MAX_DURATION))
 	_landed_balls.clear()
 
 	ball_count += pending_balls
@@ -445,19 +487,27 @@ func _spawn_hit_chunks(pos: Vector2, color: Color, block_size: float) -> void:
 			randf_range(-6.0, 6.0)
 		)
 
-## Four quadrant-sized pieces cracking apart when a block is destroyed.
+## A cols x rows grid of pieces cracking apart when a block is destroyed --
+## cols/rows are each a random pick in GameRules' [MIN, MAX] range (a fixed
+## 2x2 if MIN == MAX for both), debug-menu adjustable.
 func _spawn_destroy_fragments(pos: Vector2, color: Color, block_size: float) -> void:
-	for i in range(4):
-		var frag := BlockFragment.new()
-		effects_root.add_child(frag)
-		var offset := Vector2(
-			(float(i % 2) - 0.5) * block_size * 0.4,
-			(float(i / 2) - 0.5) * block_size * 0.4
-		)
-		frag.position = pos + offset
-		var outward := offset.normalized() if offset.length_squared() > 0.01 else Vector2.RIGHT.rotated(randf() * TAU)
-		var vel := outward * randf_range(60.0, 140.0) + Vector2(0.0, -randf_range(40.0, 90.0))
-		frag.setup(color, block_size * 0.46, vel, randf_range(0.6, 0.9), randf_range(-4.0, 4.0))
+	var cols := randi_range(mini(rules.fragment_cols_min, rules.fragment_cols_max), maxi(rules.fragment_cols_min, rules.fragment_cols_max))
+	var rows := randi_range(mini(rules.fragment_rows_min, rules.fragment_rows_max), maxi(rules.fragment_rows_min, rules.fragment_rows_max))
+	cols = maxi(1, cols)
+	rows = maxi(1, rows)
+	var piece_size := Vector2(block_size / float(cols), block_size / float(rows)) * 0.92
+	for row in range(rows):
+		for col in range(cols):
+			var frag := BlockFragment.new()
+			effects_root.add_child(frag)
+			var offset := Vector2(
+				(float(col) - float(cols - 1) * 0.5) * block_size / float(cols),
+				(float(row) - float(rows - 1) * 0.5) * block_size / float(rows)
+			)
+			frag.position = pos + offset
+			var outward := offset.normalized() if offset.length_squared() > 0.01 else Vector2.RIGHT.rotated(randf() * TAU)
+			var vel := outward * randf_range(60.0, 140.0) + Vector2(0.0, -randf_range(40.0, 90.0))
+			frag.setup(color, piece_size, vel, randf_range(0.6, 0.9), randf_range(-4.0, 4.0))
 
 func _draw() -> void:
 	if rules == null:

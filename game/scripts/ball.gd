@@ -29,14 +29,20 @@ func launch(r: GameRules, from: Vector2, dir: Vector2) -> void:
 ## along a randomly-arced path to `target`, then frees it. Used once all
 ## balls are down, to visually gather them at the new launch position rather
 ## than having them just vanish where they landed -- see Game._end_round.
-func return_to(target: Vector2, duration: float) -> void:
+## `delay` staggers the START of the movement (Skins.ReturnMode's ordered /
+## random variants); the ball still sits frozen at its landing spot until then.
+func return_to(target: Vector2, duration: float, delay: float = 0.0) -> void:
 	var start := global_position
 	if start.distance_to(target) < 1.0:
+		if delay > 0.0:
+			await get_tree().create_timer(delay).timeout
 		queue_free()
 		return
 	var arc := randf_range(30.0, 120.0)
 	var control := (start + target) * 0.5 + Vector2(0.0, -arc)
 	var tw := create_tween()
+	if delay > 0.0:
+		tw.tween_interval(delay)
 	tw.tween_method(
 		func(t: float) -> void:
 			var a := start.lerp(control, t)

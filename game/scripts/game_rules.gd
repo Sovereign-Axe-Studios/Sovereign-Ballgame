@@ -24,6 +24,7 @@ const _Ball := preload("res://scripts/config/ball.gd")
 const _WallCorners := preload("res://scripts/config/wall_corners.gd")
 const _Shooter := preload("res://scripts/config/shooter.gd")
 const _Loss := preload("res://scripts/config/loss.gd")
+const _Juice := preload("res://scripts/config/juice.gd")
 
 # --------------------------------------------------------------------- layout
 @export_group("Layout")
@@ -96,6 +97,15 @@ const _Loss := preload("res://scripts/config/loss.gd")
 @export_group("Loss")
 ## Which row kills you. -1 means "the bottom row".
 @export var death_row_override: int = _Loss.DEATH_ROW_OVERRIDE
+
+# ---------------------------------------------------------------------- juice
+@export_group("Juice")
+## How many columns/rows a destroyed block cracks into. Each is a random pick
+## in [MIN, MAX] per block; MIN == MAX for a constant. Debug-menu adjustable.
+@export var fragment_cols_min: int = _Juice.FRAGMENT_COLS_MIN
+@export var fragment_cols_max: int = _Juice.FRAGMENT_COLS_MAX
+@export var fragment_rows_min: int = _Juice.FRAGMENT_ROWS_MIN
+@export var fragment_rows_max: int = _Juice.FRAGMENT_ROWS_MAX
 
 func death_row() -> int:
 	return grid_height - 1 if death_row_override < 0 else death_row_override

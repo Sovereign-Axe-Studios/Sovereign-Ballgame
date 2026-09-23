@@ -86,13 +86,13 @@ vertical_alignment = 1
 [node name="HintLabel" type="Label" parent="HUD/Root"]
 layout_mode = 0
 offset_left = 44.0
-offset_top = 1838.0
+offset_top = 1936.0
 offset_right = 1036.0
-offset_bottom = 1892.0
+offset_bottom = 1990.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.4, 0.44, 0.5, 1)
-theme_override_font_sizes/font_size = 30
-text = "← → aim   ·   SPACE or drag to fire   ·   ↑ ↓ debug shift   ·   R restart"
+theme_override_font_sizes/font_size = 28
+text = "A D aim   ·   SPACE or drag to fire   ·   Esc pause   ·   R restart"
 horizontal_alignment = 1
 vertical_alignment = 1
 

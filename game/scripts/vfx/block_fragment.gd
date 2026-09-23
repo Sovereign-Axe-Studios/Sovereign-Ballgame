@@ -1,7 +1,11 @@
 class_name BlockFragment
 extends Node2D
-## A quarter of a destroyed block: cracks apart, tumbles a short fall, and
+## One piece of a destroyed block: cracks apart, tumbles a short fall, and
 ## fades. Built via `.new()` + `setup()`, no scene -- see BlockChunk.
+##
+## Size is a Vector2, not a single float -- GameRules.fragment_cols/rows_*
+## can differ, so a piece is generally rectangular, not square (a 3-wide,
+## 2-tall split makes pieces wider than they are tall).
 ##
 ## "Falls to the ground and fades" here means a short local fall, not a
 ## flight all the way to the play field's floor_y -- a block near the top of
@@ -11,7 +15,7 @@ extends Node2D
 ## wrong in practice.
 
 var _color := Color.WHITE
-var _size: float = 20.0
+var _size := Vector2(20.0, 20.0)
 var _vel := Vector2.ZERO
 var _spin: float = 0.0
 var _age: float = 0.0
@@ -19,7 +23,7 @@ var _lifetime: float = 0.7
 
 const GRAVITY := 700.0
 
-func setup(color: Color, size: float, vel: Vector2, lifetime: float, spin: float) -> void:
+func setup(color: Color, size: Vector2, vel: Vector2, lifetime: float, spin: float) -> void:
 	_color = color
 	_size = size
 	_vel = vel
@@ -42,6 +46,6 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	var r := Rect2(Vector2(-_size * 0.5, -_size * 0.5), Vector2(_size, _size))
+	var r := Rect2(_size * -0.5, _size)
 	draw_rect(r, _color, true)
-	draw_rect(r, _color.darkened(0.35), false, maxf(1.5, _size * 0.03))
+	draw_rect(r, _color.darkened(0.35), false, maxf(1.5, minf(_size.x, _size.y) * 0.03))

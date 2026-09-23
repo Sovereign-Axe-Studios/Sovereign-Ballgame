@@ -1,10 +1,12 @@
 extends Node
-## Skins -- a handful of alternate ball / background / block colour
-## treatments, for quick side-by-side comparison from the Debug Menu.
+## Skins -- a handful of alternate ball / background / block / launcher
+## visuals, and a few ball-return behaviour variants, all for quick
+## side-by-side comparison from the pause menu's Skins page (visuals) and
+## Debug Menu (ball-return mode).
 ##
-## Dev-facing test swatches, not shipped content: no unlocks, no art assets
+## Dev-facing test variants, not shipped content: no unlocks, no art assets
 ## (there aren't any yet), no persistence -- session-only like `Debug`, not
-## `Settings`, since "which swatch was I looking at" isn't worth remembering
+## `Settings`, since "which one was I comparing" isn't worth remembering
 ## across a restart.
 
 signal changed
@@ -31,6 +33,38 @@ class BlockSkin:
 	func _init(n: String, r: Array[Color]) -> void:
 		skin_name = n
 		ramp = r
+
+## What Shooter._draw() renders. Not a colour swap like the others -- BALL and
+## CANNON are genuinely different vector shapes, so this is an enum rather
+## than a data record; Shooter branches on it directly.
+enum LauncherShape { BALL, CANNON }
+
+class LauncherSkin:
+	var skin_name: String
+	var shape: LauncherShape
+	func _init(n: String, s: LauncherShape) -> void:
+		skin_name = n
+		shape = s
+
+## How a landed ball behaves before the next round starts. STICK_* keep it
+## frozen where it landed until the round fully resolves, then move it;
+## MOVE_TO_SHOOTER and LINE_UP move it the instant it lands instead. See
+## Game._on_ball_finished / _end_round for where each branch is handled.
+enum ReturnMode {
+	STICK_ALL_AT_ONCE,
+	STICK_ORDERED,
+	STICK_RANDOM,
+	MOVE_TO_SHOOTER,
+	LINE_UP,
+}
+
+const RETURN_MODE_NAMES := {
+	ReturnMode.STICK_ALL_AT_ONCE: "Stick, then all move at once",
+	ReturnMode.STICK_ORDERED: "Stick, then move in landing order",
+	ReturnMode.STICK_RANDOM: "Stick, then move in random order",
+	ReturnMode.MOVE_TO_SHOOTER: "Move to shooter immediately",
+	ReturnMode.LINE_UP: "Line up immediately",
+}
 
 var ball_skins: Array[BallSkin] = [
 	BallSkin.new("Classic", Palette.BALL, Color(1, 1, 1, 0.55)),
@@ -62,9 +96,16 @@ var block_skins: Array[BlockSkin] = [
 	] as Array[Color]),
 ]
 
+var launcher_skins: Array[LauncherSkin] = [
+	LauncherSkin.new("Ball", LauncherShape.BALL),
+	LauncherSkin.new("Cannon", LauncherShape.CANNON),
+]
+
 var ball_index: int = 0
 var background_index: int = 0
 var block_index: int = 0
+var launcher_index: int = 0
+var return_mode: ReturnMode = ReturnMode.STICK_ALL_AT_ONCE
 
 func ball() -> BallSkin:
 	return ball_skins[ball_index]
@@ -74,6 +115,12 @@ func background() -> BackgroundSkin:
 
 func block() -> BlockSkin:
 	return block_skins[block_index]
+
+func launcher() -> LauncherSkin:
+	return launcher_skins[launcher_index]
+
+func return_mode_name() -> String:
+	return RETURN_MODE_NAMES[return_mode]
 
 func cycle_ball() -> void:
 	ball_index = (ball_index + 1) % ball_skins.size()
@@ -85,4 +132,12 @@ func cycle_background() -> void:
 
 func cycle_block() -> void:
 	block_index = (block_index + 1) % block_skins.size()
+	changed.emit()
+
+func cycle_launcher() -> void:
+	launcher_index = (launcher_index + 1) % launcher_skins.size()
+	changed.emit()
+
+func cycle_return_mode() -> void:
+	return_mode = ((return_mode + 1) % ReturnMode.size()) as ReturnMode
 	changed.emit()

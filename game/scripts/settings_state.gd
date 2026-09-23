@@ -24,6 +24,11 @@ var music_volume: float = 1.0
 ## Defaults on -- this preserves the look before the toggle existed rather
 ## than changing anyone's first impression of the game.
 var show_background_grid: bool = true
+## Pixel width of those lines. GridManager also rounds each line's position
+## to the nearest pixel regardless of this value -- an unaligned 1px line
+## anti-aliases to nearly nothing, which is why some looked like they were
+## "missing" before this existed.
+var grid_line_thickness: float = 1.0
 
 func _ready() -> void:
 	_load()
@@ -50,6 +55,10 @@ func set_show_background_grid(v: bool) -> void:
 	show_background_grid = v
 	_save_and_notify()
 
+func set_grid_line_thickness(v: float) -> void:
+	grid_line_thickness = clampf(v, 0.5, 4.0)
+	_save_and_notify()
+
 func _save_and_notify() -> void:
 	_save()
 	changed.emit()
@@ -73,6 +82,7 @@ func _load() -> void:
 		sfx_volume = cfg.get_value("settings", "sfx_volume", sfx_volume)
 		music_volume = cfg.get_value("settings", "music_volume", music_volume)
 		show_background_grid = cfg.get_value("settings", "show_background_grid", show_background_grid)
+		grid_line_thickness = cfg.get_value("settings", "grid_line_thickness", grid_line_thickness)
 	_apply_bus_volume("SFX", sfx_volume)
 	_apply_bus_volume("Music", music_volume)
 
@@ -83,4 +93,5 @@ func _save() -> void:
 	cfg.set_value("settings", "sfx_volume", sfx_volume)
 	cfg.set_value("settings", "music_volume", music_volume)
 	cfg.set_value("settings", "show_background_grid", show_background_grid)
+	cfg.set_value("settings", "grid_line_thickness", grid_line_thickness)
 	cfg.save(SAVE_PATH)

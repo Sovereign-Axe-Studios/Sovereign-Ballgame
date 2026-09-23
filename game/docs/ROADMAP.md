@@ -39,14 +39,20 @@
 - [x] Counter for damage overall
 - [x] Blocks change colour with health, ROYGBIV across 0–100
 - [x] Visual for the ball shooter
-- [~] Juice: hit chunks + destroy fragments done (procedural, no screen shake
-      yet -- Settings.screen_shake_strength is plumbed, unconsumed)
-- [x] Balls gather to the new launch position on a curved path instead of
-      vanishing where they land; the shooter slides rather than snaps
+- [~] Juice: hit chunks + destroy fragments done (fragment cols/rows
+      configurable, Debug Menu adjustable), no screen shake yet --
+      Settings.screen_shake_strength is plumbed, unconsumed
+- [x] Balls gather to the new launch position instead of vanishing where they
+      land, with 5 selectable variants (Stick x3 / Move to shooter / Line up
+      -- Debug Menu, Skins.ReturnMode); the shooter slides on the FIRST ball's
+      landing, not at round end
 - [x] +1 ball pickup spawns a falling ball that lands before the count ticks up
-- [x] A few alternate ball/background/block colour swatches, cycleable from
-      the Debug Menu for comparison (no art assets, so these are recolours,
-      not skins in the asset sense)
+- [x] A few alternate ball/background/block/launcher-shape visuals (a plain
+      ball or a simple vector cannon), with live previews on the pause
+      menu's Skins page (no art assets, so these are recolours/reshapes, not
+      skins in the asset sense)
+- [x] Background grid lines are pixel-snapped (were anti-aliasing to
+      near-invisible on some rows/columns) and their thickness is a setting
 
 ## Challenge
 - [x] Round advances once every ball is down

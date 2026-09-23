@@ -252,14 +252,20 @@ func _draw() -> void:
 	# One line per cell edge -- 1x1 against the actual gameplay grid, not a
 	# decorative pattern at its own scale. Settings-gated; the death-row
 	# tint below is a gameplay indicator, not decoration, so it always shows.
+	#
+	# Positions are rounded to the nearest pixel: an axis-aligned 1px line at
+	# a fractional pixel offset anti-aliases across two rows/columns at half
+	# opacity each, which at this alpha reads as "the line is missing" --
+	# some rows had exactly that problem before this rounding existed.
 	if Settings.show_background_grid:
 		var faint := Color(1, 1, 1, 0.045)
+		var lw := Settings.grid_line_thickness
 		for c in range(rules.grid_width + 1):
-			var x := float(c) * cell_size
-			draw_line(origin + Vector2(x, 0), origin + Vector2(x, h), faint, 1.0)
+			var x := roundf(origin.x + float(c) * cell_size)
+			draw_line(Vector2(x, origin.y), Vector2(x, origin.y + h), faint, lw)
 		for r in range(rules.grid_height + 1):
-			var y := float(r) * cell_size
-			draw_line(origin + Vector2(0, y), origin + Vector2(w, y), faint, 1.0)
+			var y := roundf(origin.y + float(r) * cell_size)
+			draw_line(Vector2(origin.x, y), Vector2(origin.x + w, y), faint, lw)
 
 	# The row that ends the run.
 	var dy := float(rules.death_row()) * cell_size

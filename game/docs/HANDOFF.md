@@ -61,7 +61,7 @@ that can end a round, and it does so on `_to_fire <= 0 and _live_balls <= 0`.
 | File | Holds | Worth knowing |
 | --- | --- | --- |
 | `scripts/cfg.gd` | `Cfg` autoload — thin index over `scripts/config/*.gd` | Flat re-exports (`Cfg.GRID_WIDTH`) plus namespaced access (`Cfg.Board.GRID_WIDTH`). No runtime-override layer yet — see its header comment. |
-| `scripts/config/*.gd` | The numbers, one file per domain (`board`, `spawning`, `ball`, `wall_corners`, `shooter`, `loss`) | Where a value's rationale comment actually lives. `GameRules` preloads these directly rather than reading through `Cfg` — see below. |
+| `scripts/config/*.gd` | The numbers, one file per domain (`board`, `spawning`, `ball`, `wall_corners`, `shooter`, `loss`, `juice`) | Where a value's rationale comment actually lives. `GameRules` preloads these directly rather than reading through `Cfg` — see below. |
 | `scripts/game_rules.gd` | Every tunable (defaulted from `scripts/config/*.gd`) + 5 virtual hooks | The mod seam. See §5. |
 | `scripts/game.gd` | `Game` — round state machine, playfield construction, scoring, input | `_ready` computes cell size and builds walls; `_draw` paints background, walls, floor line |
 | `scripts/grid_manager.gd` | `GridManager` — the block lattice | `cells[row][col]` -> `Block`, `BallPickup` or `null` |
@@ -73,10 +73,10 @@ that can end a round, and it does so on `_to_fire <= 0 and _live_balls <= 0`.
 | `scripts/palette.gd` | Shared colours, ROYGBIV health ramp | `Palette.health_color(value, max_value = 100)` |
 | `scripts/debug_state.gd` | `Debug` autoload — the debug-mode flag | Session-only; survives a scene reload on purpose. See §9. |
 | `scripts/settings_state.gd` | `Settings` autoload — persisted user prefs | UI scale, screen shake strength, SFX/music volume, background-grid toggle. Saved to `user://settings.cfg` on every change. |
-| `scripts/skins.gd` | `Skins` autoload — ball/background/block test swatches | Session-only (like `Debug`, not `Settings`). `Palette.health_color()` reads `Skins.block().ramp`. See §10. |
-| `scripts/vfx/block_chunk.gd`, `block_fragment.gd` | Hit chunks / destroy fragments | `.new()` + `setup()`, no scene. See §10. |
+| `scripts/skins.gd` | `Skins` autoload — ball/background/block/launcher visuals + `ReturnMode` | Session-only (like `Debug`, not `Settings`). `Palette.health_color()` reads `Skins.block().ramp`. See §10, §11. |
+| `scripts/vfx/block_chunk.gd`, `block_fragment.gd` | Hit chunks / destroy fragments | `.new()` + `setup()`, no scene. Fragment piece count is `GameRules.fragment_cols/rows_min/max`. See §10, §11. |
 | `scripts/falling_ball.gd` | `FallingBall` — the +1 ball pickup's cosmetic drop | Reports `landed`; `Game` only increments `pending_balls` on that signal. See §10. |
-| `scripts/ui/pause_menu.gd` | `PauseMenu` — 3 pages: root (Resume/Settings/Debug Menu/Main menu), Settings, Debug Menu | Built in code, not `.tscn`; `process_mode = ALWAYS` so it works while paused. See §9. |
+| `scripts/ui/pause_menu.gd` | `PauseMenu` — 4 pages: root (Resume/Settings/Debug Menu/Skins/Main menu), Settings, Skins, Debug Menu | Built in code, not `.tscn`; `process_mode = ALWAYS` so it works while paused. `Esc` backs out of a sub-page before it closes the menu. See §9, §11. |
 | `scripts/ui/debug_overlay.gd` | `DebugOverlay` — row-clear buttons, hold-to-clear-all, on-screen D-pad, expected-count readouts | Visible only while `Debug.enabled`. See §9. |
 
 Scenes are deliberately thin. `main.tscn` is `Main` (Game) with five children:
@@ -473,7 +473,92 @@ down each frame.
 
 ---
 
-## 11. Loose ends
+## 11. Footer, grid-line fix, fragment config, launcher skins, ball-return modes
+
+### Footer (canvas grew to 1080x2000)
+
+The hint text used to sit inside the last ~80px of a 1080x1920 canvas,
+crowding the debug overlay's D-pad/clear-all buttons. `viewport_height` is
+now 2000 (`window_height_override` 1000, keeping the same 0.5 scale) purely
+additive at the bottom -- `rules.floor_y` (1820) and everything above it are
+untouched, so grid/wall/shooter geometry didn't move. `HintLabel` moved to
+y=1936-1990, in the new space; its text was also updated (it still said
+"arrow keys aim / debug shift" from before the input remap).
+
+### Grid-line "missing lines" was a real bug
+
+`GridManager._draw()`'s grid lines are now rounded to the nearest pixel
+(`roundf(origin.x/y + n * cell_size)`) before drawing. An axis-aligned 1px
+line at a fractional pixel offset anti-aliases across two rows/columns at
+half opacity each -- at the faint alpha used here that's indistinguishable
+from not being drawn at all, which is why some lines looked entirely absent.
+`Settings.grid_line_thickness` (0.5-4px, Settings page) is the
+user-controllable half of the fix; the rounding is the actual bug fix and
+isn't optional.
+
+### Fragment count is configurable
+
+`GameRules.fragment_cols_min/max` and `fragment_rows_min/max` (backed by
+`scripts/config/juice.gd` / `Cfg.Juice`) replace the old fixed 2x2.
+`Game._spawn_destroy_fragments` picks a random cols/rows in each range (MIN
+== MAX for a constant) and arranges that many `BlockFragment`s in a grid,
+sized `block_size / cols` x `block_size / rows` -- `BlockFragment.setup` now
+takes a `Vector2` size, not a single float, since pieces are generally
+rectangular once cols != rows. Debug Menu's "Destroy fragments" row writes
+straight to `rules.*`, no apply step (unlike the grid-size fields, this
+doesn't need a board rebuild).
+
+### Launcher skins
+
+`Skins.LauncherShape` (`BALL` / `CANNON`) is a genuinely different vector
+shape per option, not a colour swap like the other three skins -- `Shooter.
+_draw()` branches on `Skins.launcher().shape` into `_draw_ball_launcher()` or
+`_draw_cannon()`. The cannon is deliberately plain (a base disc, a rotated
+barrel polygon, a muzzle ring in the ball skin's accent colour) -- proof the
+launcher is a skin category, not a showcase piece.
+
+### Ball-return modes (`Skins.ReturnMode`)
+
+Five variants, cycled from the Debug Menu's "Ball return behaviour" row:
+
+- `STICK_ALL_AT_ONCE` (default, matches the previous behaviour exactly),
+  `STICK_ORDERED`, `STICK_RANDOM` -- all three freeze a landed ball in
+  `Game._landed_balls` until `_end_round`, which then calls `Ball.return_to`
+  either together, in landing order, or in a shuffled order, each subsequent
+  ball's tween start delayed by `i * BALL_RETURN_STAGGER` (a `tween_interval`
+  prepended in `Ball.return_to`'s new `delay` parameter).
+- `MOVE_TO_SHOOTER` -- `_on_ball_finished` calls `return_to` immediately, at
+  `_launch_target()` (the shooter's X once the first ball has set it). Never
+  touches `_landed_balls`.
+- `LINE_UP` -- same immediacy, but the target is `_next_line_up_slot()`: a
+  queue below the floor line (`rules.floor_y + 40`), one `LINE_UP_SPACING`
+  apart, centred and incremented by `_line_up_count` (reset each round in
+  `_begin_firing`).
+
+Because MOVE_TO_SHOOTER/LINE_UP release a ball the instant it lands while
+STICK_* batch it, `_end_round`'s cleanup loop only ever sees STICK_* balls --
+the other two modes' balls are already mid-tween and free themselves via
+`Ball.return_to`'s own `tween_callback(queue_free)`.
+
+### Pause menu: Skins page, bigger UI, Escape-back
+
+Root is now 5 buttons (added **Skins**). Every page went through
+`_wrap_page()` (a `MarginContainer` + `ScrollContainer`, `MARGIN = 36`) for
+real margins and to keep the now-taller Debug Menu page (fragments + return
+mode + grid fields) from overflowing the panel. `_button()` gives every
+button a real background (`StyleBoxFlat`, rounded corners, normal/hover/
+pressed/disabled states) at 32px font and 76px minimum height -- Resume gets
+an accent colour as the root page's one obvious default action.
+`PauseMenu._current_page` is tracked explicitly now so `_unhandled_input` can
+tell root from a sub-page: `Esc` on a sub-page calls `_show_page(_root_page)`
+instead of `close()`, and only closes the menu when already on root. Skin
+cycling moved off the Debug Menu onto its own page, each with a small
+`Control` preview drawn via its own `draw` signal (no new script file --
+`control.draw.connect(func(): ...)` is enough for a 64x64 swatch).
+
+---
+
+## 12. Loose ends
 
 - `icon.svg` is a placeholder. Six neon candidates are in `branding/icons/`;
   Theo picks one and it gets copied over `icon.svg`. Until then the icon is

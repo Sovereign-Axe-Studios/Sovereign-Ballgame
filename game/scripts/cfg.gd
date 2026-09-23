@@ -31,6 +31,7 @@ const Ball := preload("res://scripts/config/ball.gd")
 const WallCorners := preload("res://scripts/config/wall_corners.gd")
 const Shooter := preload("res://scripts/config/shooter.gd")
 const Loss := preload("res://scripts/config/loss.gd")
+const Juice := preload("res://scripts/config/juice.gd")
 
 # --- Flat re-exports. Alphabetical within each domain. ----------------------
 
@@ -69,3 +70,9 @@ const MAX_AIM_DEGREES := Shooter.MAX_AIM_DEGREES
 
 # Loss
 const DEATH_ROW_OVERRIDE := Loss.DEATH_ROW_OVERRIDE
+
+# Juice
+const FRAGMENT_COLS_MAX := Juice.FRAGMENT_COLS_MAX
+const FRAGMENT_COLS_MIN := Juice.FRAGMENT_COLS_MIN
+const FRAGMENT_ROWS_MAX := Juice.FRAGMENT_ROWS_MAX
+const FRAGMENT_ROWS_MIN := Juice.FRAGMENT_ROWS_MIN

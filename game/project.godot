@@ -30,9 +30,9 @@ Skins="*res://scripts/skins.gd"
 [display]
 
 window/size/viewport_width=1080
-window/size/viewport_height=1920
+window/size/viewport_height=2000
 window/size/window_width_override=540
-window/size/window_height_override=960
+window/size/window_height_override=1000
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=1
