@@ -2,12 +2,21 @@ class_name HUD
 extends CanvasLayer
 ## Round number, ball count, damage this shot cycle, damage overall.
 
+@onready var _ui_root: Control = $Root
 @onready var _round: Label = $Root/RoundLabel
 @onready var _balls: Label = $Root/BallsLabel
 @onready var _round_damage: Label = $Root/RoundDamageLabel
 @onready var _total_damage: Label = $Root/TotalDamageLabel
 @onready var _hint: Label = $Root/HintLabel
 @onready var _game_over: Label = $Root/GameOverLabel
+
+func _ready() -> void:
+	_ui_root.pivot_offset = Vector2.ZERO
+	Settings.changed.connect(_apply_ui_scale)
+	_apply_ui_scale()
+
+func _apply_ui_scale() -> void:
+	_ui_root.scale = Vector2.ONE * Settings.ui_scale
 
 func refresh(round_number: int, balls: int, pending: int, round_damage: int, total_damage: int) -> void:
 	_round.text = "ROUND %d" % round_number

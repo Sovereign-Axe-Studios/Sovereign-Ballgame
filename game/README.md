@@ -28,10 +28,23 @@ main scene.
 `←` `→` `↑` `↓` are reserved for the debug menu (see below), not aiming --
 that's deliberately A/D-only now so the two don't fight over the same keys.
 
-## Debug menu
+## Pause menu
 
-`Esc` opens the pause menu, which has an **Enable debug mode** checkbox.
-While it's on:
+`Esc` opens the pause menu: **Resume**, **Settings**, **Debug Menu**, **Main
+menu** (stub -- no main menu scene exists yet). Settings and Debug Menu each
+open their own page, with a **Back** button to return.
+
+### Settings
+
+UI scale (zooms the HUD / pause / debug-overlay layers, 50–200%), screen
+shake strength (not consumed yet -- no screen shake exists), and SFX / Music
+volume, which move the "SFX" / "Music" audio buses (`audio/bus_layout.tres`;
+no sounds route through them yet either, but the buses and sliders are real).
+All four persist to `user://settings.cfg` via the `Settings` autoload.
+
+### Debug menu
+
+The Debug Menu page has an **Enable debug mode** checkbox. While it's on:
 
 | Input | Action |
 | --- | --- |
@@ -47,9 +60,10 @@ shift down without spawning a new row or advancing the level, since an
 up-shift manufactures slack that normal play didn't earn. On screen (touch or
 mouse), a `+`-shaped D-pad does the same four directions, with a center toggle
 button standing in for holding Shift; a button next to each row clears it, and
-a bottom-left hold-to-fill button clears the whole field. The pause menu also
-has grid width/height/kill-row/spawn-row fields (Apply resets the board), a
-game-mods stub, and a save-game-state stub.
+a bottom-left hold-to-fill button clears the whole field. The Debug Menu page
+also has grid width/height/kill-row/spawn-row fields (Apply resets the
+board), a game-mods stub, a save-game-state stub, and **Restart** (moved here
+rather than the pause-menu root, to match the four-button spec above).
 
 The on-screen D-pad and two-finger-tap gesture are unverified on real touch
 hardware -- there's no Android/touch build yet (see ROADMAP.md).
@@ -104,11 +118,13 @@ game/
   docs/HANDOFF.md      current state, data model, next tasks
   docs/ROADMAP.md      build order, with what is done marked
   scenes/              main, ball, block, pickup
+  audio/bus_layout.tres  Master -> Music, SFX buses (no sounds routed yet)
   scripts/
     cfg.gd             Cfg autoload -- thin index over scripts/config/*.gd
     config/            the numbers, one small file per domain
     debug_state.gd     Debug autoload -- the debug-mode on/off flag
-    ui/pause_menu.gd   pause menu: debug toggle, grid tuning, restart
+    settings_state.gd  Settings autoload -- persisted user prefs
+    ui/pause_menu.gd   pause menu pages: root, Settings, Debug Menu
     ui/debug_overlay.gd  row-clear buttons, clear-all, on-screen D-pad
     game.gd            round loop, playfield construction, scoring
     game_rules.gd      every tunable number (defaults from Cfg) + the mod hooks

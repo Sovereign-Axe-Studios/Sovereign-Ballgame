@@ -72,7 +72,8 @@ that can end a round, and it does so on `_to_fire <= 0 and _live_balls <= 0`.
 | `scripts/hud.gd` | `HUD` — four counters + game over | Labels live in `main.tscn` under `HUD/Root` |
 | `scripts/palette.gd` | Shared colours, ROYGBIV health ramp | `Palette.health_color(value, max_value = 100)` |
 | `scripts/debug_state.gd` | `Debug` autoload — the debug-mode flag | Session-only; survives a scene reload on purpose. See §9. |
-| `scripts/ui/pause_menu.gd` | `PauseMenu` — debug toggle, grid tuning, mod/save stubs, restart | Built in code, not `.tscn`; `process_mode = ALWAYS` so it works while paused |
+| `scripts/settings_state.gd` | `Settings` autoload — persisted user prefs | UI scale, screen shake strength, SFX/music volume. Saved to `user://settings.cfg` on every change. |
+| `scripts/ui/pause_menu.gd` | `PauseMenu` — 3 pages: root (Resume/Settings/Debug Menu/Main menu), Settings, Debug Menu | Built in code, not `.tscn`; `process_mode = ALWAYS` so it works while paused. See §9. |
 | `scripts/ui/debug_overlay.gd` | `DebugOverlay` — row-clear buttons, hold-to-clear-all, on-screen D-pad, expected-count readouts | Visible only while `Debug.enabled`. See §9. |
 
 Scenes are deliberately thin. `main.tscn` is `Main` (Game) with five children:
@@ -312,12 +313,45 @@ Title screen, mod menu, settings, persistence, unlocking and audio are all in
 
 ---
 
-## 9. Debug menu
+## 9. Pause menu, Settings, and the debug menu
 
-`Esc` -> `PauseMenu` (built in code, `scripts/ui/pause_menu.gd`) -> **Enable
-debug mode** flips the `Debug` autoload's `enabled` flag. Everything below is
-gated behind it (`Game._tick_debug_input`, `Game._unhandled_input`,
-`DebugOverlay._on_debug_enabled_changed`) and otherwise inert.
+`Esc` -> `PauseMenu` (built in code, `scripts/ui/pause_menu.gd`), a root page
+with exactly four buttons (Resume, Settings, Debug Menu, Main menu -- the
+last a disabled stub, no main menu scene exists) and two sub-pages reached
+from it. `_show_page` just toggles `visible` on three sibling Controls built
+once in `_build_ui`; there's no navigation stack, so a page can only ever go
+back to root, never to another sub-page directly. `Restart` lives on the
+Debug Menu page, not root, since the root button list was specced exactly and
+didn't include it.
+
+### Settings (persisted)
+
+The `Settings` autoload (`scripts/settings_state.gd`) holds `ui_scale`,
+`screen_shake_strength`, `sfx_volume`, `music_volume` -- loaded from and saved
+to `user://settings.cfg` (a `ConfigFile`) on every change, so unlike `Debug`
+these survive an actual game restart, not just a scene reload.
+
+- **UI scale** is applied as a uniform `Control.scale` (pivot at the origin)
+  on three separate root Controls: `HUD`'s `$Root`, `PauseMenu`'s built root,
+  and `DebugOverlay`'s built root. It is NOT `Window.content_scale_factor` --
+  the design resolution and canvas_items/expand stretch are untouched; this
+  only zooms the UI layer, and each of the three listens to
+  `Settings.changed` independently rather than sharing one scaled parent.
+- **SFX / Music volume** move the "SFX" / "Music" buses declared in
+  `audio/bus_layout.tres` (`project.godot`'s `audio/buses/default_bus_layout`)
+  via `AudioServer.set_bus_volume_db` / `set_bus_mute`. No sound files or
+  `AudioStreamPlayer`s exist anywhere yet -- the buses and the sliders are
+  real, there is just nothing routed through them to hear.
+- **Screen shake strength** is a plumbed, unconsumed value. No screen shake
+  exists (ROADMAP's "Juice" row is still unchecked); wire it in when that
+  lands rather than adding a second setting then.
+
+### Debug menu
+
+`Esc` -> Debug Menu -> **Enable debug mode** flips the `Debug` autoload's
+`enabled` flag. Everything below is gated behind it (`Game._tick_debug_input`,
+`Game._unhandled_input`, `DebugOverlay._on_debug_enabled_changed`) and
+otherwise inert.
 
 ### Row-shift credit
 

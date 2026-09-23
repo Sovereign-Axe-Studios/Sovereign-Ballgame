@@ -68,7 +68,10 @@
       `expand`, so this is mostly HUD anchoring)
 
 ## Unscheduled
-- [ ] Title screen · mod menu · settings (BG / SFX volume, debug)
+- [ ] Title screen
+- [~] Mod menu (stub button on the Debug Menu page only, no mod list yet) ·
+      settings ([x] UI scale, SFX/music volume — no sounds routed yet;
+      screen shake strength plumbed, unconsumed; [x] debug menu)
 - [ ] Persistence across scenes: high scores, active mods
 - [ ] Mod unlocking — new random mod every 25 rounds, with an unlock visual
 - [ ] Audio: BG, SFX, button click, collection, milestone stingers

@@ -23,6 +23,7 @@ const HOLD_TO_CLEAR_SECONDS := 1.2
 var touch_shift_toggled: bool = false
 
 var _game: Game
+var _ui_root: Control
 var _row_button_root: Control
 var _row_buttons: Array[Button] = []
 var _ball_label: Label
@@ -36,9 +37,14 @@ func _ready() -> void:
 	_game = get_parent() as Game
 	_build_ui()
 	Debug.enabled_changed.connect(_on_debug_enabled_changed)
+	Settings.changed.connect(_apply_ui_scale)
+	_apply_ui_scale()
 	visible = Debug.enabled
 	if visible:
 		refresh_row_buttons()
+
+func _apply_ui_scale() -> void:
+	_ui_root.scale = Vector2.ONE * Settings.ui_scale
 
 func _on_debug_enabled_changed(value: bool) -> void:
 	visible = value
@@ -87,10 +93,12 @@ func refresh_row_buttons() -> void:
 		_row_buttons.append(btn)
 
 func _build_ui() -> void:
-	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(root)
+	_ui_root = Control.new()
+	_ui_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_ui_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ui_root.pivot_offset = Vector2.ZERO
+	add_child(_ui_root)
+	var root := _ui_root
 
 	_row_button_root = Control.new()
 	_row_button_root.set_anchors_preset(Control.PRESET_FULL_RECT)
