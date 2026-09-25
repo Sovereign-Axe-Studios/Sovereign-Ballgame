@@ -2,10 +2,12 @@ class_name GameRules
 extends Resource
 ## Every tunable number for a run lives here, and nowhere else.
 ##
-## This is the seam the mod system plugs into later. A mod is ultimately either
-## (a) a tweak to these values, or (b) a subclass that overrides one of the
-## virtual hooks at the bottom. Gameplay scripts never hardcode a magic number;
-## they read it from the GameRules instance handed to them by Game.
+## This is the seam the mod system plugs into. `install()` puts one `GameMod`
+## per category into a slot; a mod either tweaks these values (`apply`) or
+## answers one of the hooks at the bottom, each of which is a direct call into
+## the slot that owns it (see `scripts/mods/game_mod.gd`). Gameplay scripts
+## never hardcode a magic number; they read it from the GameRules instance
+## handed to them by Game.
 ##
 ## The values themselves -- and the rationale behind each one -- live in
 ## `scripts/config/*.gd`, one small file per domain, indexed by `scripts/cfg.gd`
@@ -92,6 +94,9 @@ const _Juice := preload("res://scripts/config/juice.gd")
 @export var max_aim_degrees: float = _Shooter.MAX_AIM_DEGREES
 ## Degrees per second while an aim key is held.
 @export var aim_speed_degrees: float = _Shooter.AIM_SPEED_DEGREES
+## Each ball's launch direction is rotated by a random angle in +/- this many
+## degrees. 0 is perfect accuracy.
+@export var random_rotate_value_deg: float = _Shooter.RANDOM_ROTATE_VALUE_DEG
 
 # ----------------------------------------------------------------------- loss
 @export_group("Loss")
@@ -107,28 +112,106 @@ const _Juice := preload("res://scripts/config/juice.gd")
 @export var fragment_rows_min: int = _Juice.FRAGMENT_ROWS_MIN
 @export var fragment_rows_max: int = _Juice.FRAGMENT_ROWS_MAX
 
-func death_row() -> int:
-	return grid_height - 1 if death_row_override < 0 else death_row_override
+# ---------------------------------------------------------------- mod slots
+
+## Category -> installed GameMod. A category with no entry answers with
+## `_stock`, a plain GameMod whose hooks are the default_* functions below.
+var _slots: Dictionary = {}
+var _stock := GameMod.new()
+
+## Put each mod in its category's slot, then let each `apply()` its value
+## tweaks. One mod per category: a second one replaces the first.
+func install(mods: Array[GameMod]) -> void:
+	for mod in mods:
+		if not mod.available:
+			push_warning("GameRules.install: skipping unavailable mod '%s'" % mod.display_name)
+			continue
+		if _slots.has(mod.category):
+			push_warning("GameRules.install: '%s' replaces '%s' in %s" % [
+				mod.display_name, (_slots[mod.category] as GameMod).display_name,
+				GameMod.category_name(mod.category)])
+		_slots[mod.category] = mod
+	for mod in active_mods():
+		mod.apply(self)
+
+## Installed mods, in Category order.
+func active_mods() -> Array[GameMod]:
+	var out: Array[GameMod] = []
+	for c in GameMod.Category.values():
+		if _slots.has(c):
+			out.append(_slots[c])
+	return out
+
+func _slot(c: GameMod.Category) -> GameMod:
+	return _slots.get(c, _stock)
 
 
-# ------------------------------------------------------------- virtual hooks
-# Mods override these. Kept tiny and pure on purpose.
+# ---------------------------------------------------------------------- hooks
+# Every hook is one direct call into the slot that owns it. The stock answers
+# live in the default_* functions further down.
 
 ## How many units a row spawned for `round_number` gets to hand out.
-func row_units(_round_number: int) -> int:
-	return maxi(1, int(round(units_per_column * float(grid_width))))
+func row_units(round_number: int) -> int:
+	return _slot(GameMod.Category.DENSITY).row_units(self, round_number)
 
 ## What one unit is worth. Every block in the row is a multiple of this.
 func unit_value(round_number: int) -> int:
-	return maxi(1, round_number)
+	return _slot(GameMod.Category.DENSITY).unit_value(self, round_number)
 
 ## How many columns this row leaves empty.
 func open_slots() -> int:
+	return _slot(GameMod.Category.DENSITY).open_slots(self)
+
+## How many balls the player fires on a given round.
+func shots_for_round(ball_count: int) -> int:
+	return _slot(GameMod.Category.BALL_COLLISION).shots_for_round(self, ball_count)
+
+## Damage `ball` deals on a block contact.
+func damage_for(ball: Ball) -> int:
+	return _slot(GameMod.Category.BALL_COLLISION).damage_for(self, ball)
+
+## True = the WALL mod handled this contact; the ball skips its bounce.
+func on_wall_hit(ball: Ball, collision: KinematicCollision2D) -> bool:
+	return _slot(GameMod.Category.WALL).on_wall_hit(self, ball, collision)
+
+## Shape first, then rotation, so rotation sees the final body.
+func configure_block(block: Block) -> void:
+	_slot(GameMod.Category.SHAPE).configure_block(self, block)
+	_slot(GameMod.Category.ROTATION).configure_block(self, block)
+
+func death_row() -> int:
+	return _slot(GameMod.Category.LOSS).death_row(self)
+
+## True = the run continues (the LOSS mod cleared `blocks`).
+func on_death_row_reached(blocks: Array[Block]) -> bool:
+	return _slot(GameMod.Category.LOSS).on_death_row_reached(self, blocks)
+
+## Every installed mod's non-empty HUD line.
+func status_lines() -> Array[String]:
+	var out: Array[String] = []
+	for mod in active_mods():
+		var line := mod.status_text(self)
+		if line != "":
+			out.append(line)
+	return out
+
+
+# ----------------------------------------------------------- stock behaviour
+# What an empty slot does. Mods call these too, to fall back or build on them.
+
+func default_death_row() -> int:
+	return grid_height - 1 if death_row_override < 0 else death_row_override
+
+func default_row_units(_round_number: int) -> int:
+	return maxi(1, int(round(units_per_column * float(grid_width))))
+
+func default_unit_value(round_number: int) -> int:
+	return maxi(1, round_number)
+
+func default_open_slots() -> int:
 	var lo := clampi(mini(min_open_slots, max_open_slots), 1, grid_width - 1)
 	var hi := clampi(maxi(min_open_slots, max_open_slots), lo, grid_width - 1)
 	return randi_range(lo, hi)
 
-## How many balls the player fires on a given round. Ball-count mods (Missiles,
-## Snowball, Sniper...) live here.
-func shots_for_round(ball_count: int) -> int:
+func default_shots_for_round(ball_count: int) -> int:
 	return maxi(1, ball_count)

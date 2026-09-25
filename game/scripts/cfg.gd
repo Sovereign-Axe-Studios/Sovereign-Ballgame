@@ -20,9 +20,10 @@ extends Node
 ## care which domain it came from. Neither is "the real one" -- pick whichever
 ## reads better at the call site.
 ##
-## No runtime-override layer yet (no `tuned()` / `set_tuned()`, no debug
-## flags). There is no debug menu to write one, so there is nothing to
-## override -- add that seam when the menu that needs it lands, not before.
+## These are shipped defaults and never change at runtime. Runtime overrides
+## -- the Debug Menu's grid/fragment fields today, mods later -- write to the
+## live `GameRules` instance (`Game.rules`), never to `Cfg`. Session flags
+## live on the `Debug` autoload, not here.
 
 # --- Domains ----------------------------------------------------------------
 const Board := preload("res://scripts/config/board.gd")
@@ -67,6 +68,7 @@ const CORNER_RADIUS := WallCorners.CORNER_RADIUS
 # Shooter
 const AIM_SPEED_DEGREES := Shooter.AIM_SPEED_DEGREES
 const MAX_AIM_DEGREES := Shooter.MAX_AIM_DEGREES
+const RANDOM_ROTATE_VALUE_DEG := Shooter.RANDOM_ROTATE_VALUE_DEG
 
 # Loss
 const DEATH_ROW_OVERRIDE := Loss.DEATH_ROW_OVERRIDE
@@ -76,3 +78,23 @@ const FRAGMENT_COLS_MAX := Juice.FRAGMENT_COLS_MAX
 const FRAGMENT_COLS_MIN := Juice.FRAGMENT_COLS_MIN
 const FRAGMENT_ROWS_MAX := Juice.FRAGMENT_ROWS_MAX
 const FRAGMENT_ROWS_MIN := Juice.FRAGMENT_ROWS_MIN
+
+# --- Mods -------------------------------------------------------------------
+# One line per mod file (scripts/mods/<category>/*.gd). `Cfg.Boss.UNITS`
+# Ctrl+clicks through to the constant. MODS is the registry the mode screens
+# read, in Category order. Deleting a mod file makes its line here fail to
+# parse, and that error is the guard.
+const Spread := preload("res://scripts/mods/shot_spread/spread.gd")
+const Snowball := preload("res://scripts/mods/ball_collision/snowball.gd")
+const WrapAround := preload("res://scripts/mods/wall/wrap_around.gd")
+const Reinforcements := preload("res://scripts/mods/spawn_direction/reinforcements.gd")
+const Circles := preload("res://scripts/mods/shape/circles.gd")
+const Rotated := preload("res://scripts/mods/rotation/rotated.gd")
+const Boss := preload("res://scripts/mods/density/boss.gd")
+const ModifiedGrid := preload("res://scripts/mods/grid/modified_grid.gd")
+const Lives := preload("res://scripts/mods/loss/lives.gd")
+
+const MODS: Array[GDScript] = [
+	Spread, Snowball, WrapAround, Reinforcements, Circles, Rotated,
+	Boss, ModifiedGrid, Lives,
+]

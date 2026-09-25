@@ -60,7 +60,7 @@ that can end a round, and it does so on `_to_fire <= 0 and _live_balls <= 0`.
 
 | File | Holds | Worth knowing |
 | --- | --- | --- |
-| `scripts/cfg.gd` | `Cfg` autoload — thin index over `scripts/config/*.gd` | Flat re-exports (`Cfg.GRID_WIDTH`) plus namespaced access (`Cfg.Board.GRID_WIDTH`). No runtime-override layer yet — see its header comment. |
+| `scripts/cfg.gd` | `Cfg` autoload — thin index over `scripts/config/*.gd` | Flat re-exports (`Cfg.GRID_WIDTH`) plus namespaced access (`Cfg.Board.GRID_WIDTH`). Shipped defaults only; runtime overrides go on `Game.rules` — see its header comment. |
 | `scripts/config/*.gd` | The numbers, one file per domain (`board`, `spawning`, `ball`, `wall_corners`, `shooter`, `loss`, `juice`) | Where a value's rationale comment actually lives. `GameRules` preloads these directly rather than reading through `Cfg` — see below. |
 | `scripts/game_rules.gd` | Every tunable (defaulted from `scripts/config/*.gd`) + 5 virtual hooks | The mod seam. See §5. |
 | `scripts/game.gd` | `Game` — round state machine, playfield construction, scoring, input | `_ready` computes cell size and builds walls; `_draw` paints background, walls, floor line |
@@ -80,6 +80,13 @@ that can end a round, and it does so on `_to_fire <= 0 and _live_balls <= 0`.
 | `scripts/ui/debug_overlay.gd` | `DebugOverlay` — row-clear buttons, hold-to-clear-all, on-screen D-pad, expected-count readouts | Visible only while `Debug.enabled`. See §9. |
 | `scripts/main_menu.gd` | `MainMenu` — title screen | `run/main_scene`. Play/Settings/States(stub)/Asset Viewer. See §13. |
 | `scripts/asset_viewer.gd` | `AssetViewer` — tabbed Skins/Modes/Audio browser | Separate scene, not an overlay. See §13. |
+| `scripts/mods/game_mod.gd` | `GameMod` — base for every mod: category, text, hooks | Stock hooks hand back to `GameRules.default_*`. See §14. |
+| `scripts/mods/<category>/*.gd` | One mod per file, `const` tunables at the top | Registered by one line in `cfg.gd`'s Mods section. See §14. |
+| `scripts/run_state.gd` | `Run` autoload — the session's mode (name + mod scripts) | `Run.start()` sets it and loads the game. See §14. |
+| `scripts/mode_select.gd` | `ModeSelect` — curated list + Custom per-category picker | Built in code with `ArcadeUI`. See §14. |
+| `scripts/modes/curated_modes.gd` | `CuratedModes.all()` — the two placeholder modes | A function, not a const: `Cfg` isn't a const expression. |
+| `scripts/ui/arcade_ui.gd` | `ArcadeUI` — title-screen button/chip/label styles | Shared by `MainMenu` and `ModeSelect`. |
+| `scripts/tools/check_mods.gd` | Headless registry check | Run `scenes/tools/check_mods.tscn`, not `-s`. See §14. |
 
 Scenes are deliberately thin. `main.tscn` is `Main` (Game) with eight
 children: `Walls`, `Grid`, `Balls`, `Effects`, `Shooter`, `HUD`,
@@ -191,6 +198,12 @@ out when the debug menu needed the raw arrows for something else entirely
 
 ## 5. The mod layer — where it is going
 
+> **Superseded where it differs by §14 and
+> `docs/specs/2026-09-24-game-mods-design.md`.** Mods are now composed into
+> `GameRules` slots (one per category), not subclasses; there is no
+> `ModStack` class (the `Run` autoload holds the chosen mod scripts); and the
+> registry is an explicit list in `cfg.gd`, not a folder scan.
+
 **Cfg split (added after this doc's original date).** Every `GameRules`
 `@export` default now comes from a domain file in `scripts/config/*.gd`
 (`board`, `spawning`, `ball`, `wall_corners`, `shooter`, `loss`), indexed by
@@ -202,8 +215,9 @@ before any autoload exists. `GameRules` stays the mod seam — it still holds
 the virtual hooks below and is still what gameplay scripts read — `Cfg` is
 just where the raw numbers and their rationale live now, and where any script
 that is not a gameplay script can read a constant without going through a
-`GameRules` instance. There is no runtime-override layer (`tuned()` /
-`set_tuned()`) yet, deliberately: there is no debug menu to write one.
+`GameRules` instance. Runtime overrides (the Debug Menu today, mods next) write to the
+live `GameRules` instance; there is no separate `tuned()` / `set_tuned()`
+layer and there shouldn't be one.
 
 `GameRules` currently exposes five hooks, and they are the proof of concept, not
 the finished design:
@@ -472,7 +486,9 @@ it spawns a `FallingBall` (`scripts/falling_ball.gd`) at the pickup's
 position, and `pending_balls += 1` only happens in `_on_powerup_ball_landed`,
 wired to the `FallingBall.landed` signal once it reaches `rules.floor_y`.
 `FallingBall` never collides with anything; it's a plain node moving itself
-down each frame.
+each frame. It starts with an upward speed (`-INITIAL_SPEED`), so it pops up
+a little before gravity pulls it to the floor, a deliberate hop and not a sign
+flip to "fix".
 
 ---
 
@@ -670,8 +686,8 @@ the clamped edge angle".
 - There is no "board cleared" handling. If every block dies, the next row still
   spawns and play continues, which is correct — but Theo's notes mention a
   milestone audio cue for a clear board, so the detection will be wanted.
-- No `export_presets.cfg` yet; it is gitignored, so the first exporter will need
-  to decide whether to keep it out.
+- `export_presets.cfg` lives in `game/` (Windows Desktop preset so far) and
+  is gitignored as `/game/export_presets.cfg` -- presets stay local.
 - Currency pickups are requested but not started -- no economy numbers or a
   name for the currency exist yet.
 - "Skins" so far are recolours (§10), not asset-based skins -- there is no
@@ -682,3 +698,83 @@ the clamped edge angle".
 - The Settings controls are duplicated across `PauseMenu` and `MainMenu`
   (see §12) rather than shared. Fine at the current size; revisit if a third
   copy is ever needed.
+
+---
+
+## 14. Game mods (one per category)
+
+Design: `docs/specs/2026-09-24-game-mods-design.md`. This section is what
+actually got built and what to know when touching it.
+
+### Shape
+
+- `GameMod` (`scripts/mods/game_mod.gd`) is a `Resource` with a `Category`,
+  `display_name`, `description`, `available`, and one method per hook. The base
+  implementations are the stock game.
+- `GameRules` keeps `_slots` (Category -> GameMod). `install(mods)` fills
+  them (a second mod in the same category replaces the first, with a warning;
+  `available = false` is skipped) and then calls each mod's `apply(rules)`.
+  Every hook on `GameRules` is one direct call into its owning slot, and an
+  empty slot answers with `_stock`, a plain `GameMod` that calls back into
+  `GameRules.default_*`.
+- Hook ownership: DENSITY `row_units`/`unit_value`/`open_slots`;
+  BALL_COLLISION `shots_for_round`/`damage_for`; WALL `on_wall_hit`; SHAPE
+  then ROTATION `configure_block`; LOSS `death_row`/`on_death_row_reached`;
+  every mod `apply`/`status_text`.
+- New generic state: `Ball.bounces` (counted after each bounce's damage;
+  wrap contacts don't count), `Block.set_shape()` / `Block.set_tilt()`.
+- `GridManager.advance` now collects the Blocks that landed on the death
+  row. `Debug.invincible` destroys them first (always wins), otherwise
+  `rules.on_death_row_reached(blocks)` decides. The stock answer is "lost".
+
+### The mods
+
+| Category | File | Notes |
+| --- | --- | --- |
+| Shot spread | `shot_spread/spread.gd` | Value-only: sets `random_rotate_value_deg` to 6 |
+| Ball collision | `ball_collision/snowball.gd` | 1/3 the balls (rounded up), +1 damage per bounce |
+| Wall | `wall/wrap_around.gd` | Side contacts mirror x about the viewport centre; the ceiling still bounces |
+| Spawn direction | `spawn_direction/reinforcements.gd` | `available = false`, greyed out; no behaviour |
+| Shape | `shape/circles.gd` | `CircleShape2D` collider + circle draw. Destroy fragments stay square |
+| Rotation | `rotation/rotated.gd` | 5° x 3; shrinks by 1/(cos+sin) so it fits the cell, label counter-rotated |
+| Density | `density/boss.gd` | 1 block per row, 6 units. The cap auto-raises in `spawn_row` |
+| Grid | `grid/modified_grid.gd` | 9x11. The Debug Menu's grid apply still overrides it |
+| Loss | `loss/lives.gd` | 3 lives, one per shift that reaches the death row (not per block). HUD shows `LIVES n` |
+
+### Flow
+
+Title: **Quick Play** (`Run.start("Quick Play", [])`) or **Play** ->
+`scenes/mode_select.tscn`: two curated placeholders (Boss Rush, Tilt; each
+starts at once), then **Custom** (a chip row per category, None by default,
+NEXT starts). Esc backs out a page. In game, the HUD shows mod status lines
+under BALLS, and the pause menu's root shows `Mode: <name> -- <mods>`.
+
+`Run` holds mod **scripts**. `Game._ready` calls
+`rules.install(Run.make_mods())` before layout, so GRID mods resize the board
+and an R restart gets fresh mod instances (a full set of lives) in the same
+mode. Pause menu -> Main menu keeps `Run` as it was; the next Quick Play /
+mode pick overwrites it.
+
+### Adding a mod
+
+1. `scripts/mods/<category>/<name>.gd`: `extends GameMod`, tunables as `const`s
+   at the top with `##` rationale, set `category`/`display_name`/`description`
+   in `_init()`, override only the hooks your category owns.
+2. `cfg.gd` Mods section: a `preload` line and an entry in `MODS`.
+3. Optional: add it to a curated mode in `scripts/modes/curated_modes.gd`.
+4. `godot --headless --path . scenes/tools/check_mods.tscn` should list it.
+
+A mod that needs a hook that doesn't exist yet adds it in three places:
+`GameMod` (the stock default), `GameRules` (the direct delegating call, plus a
+`default_*` if there's stock logic), and the gameplay call site.
+
+### Verified
+
+Headless: `check_mods` passes (8 available + 1 skipped). A scratch
+auto-fire harness played every mod alone plus Boss+Lives and
+Circles+Tilt+Wrap+Snowball to game over or round 12 with no script errors.
+Wraps occurred only in wrap modes, Snowball produced hits above 1, and
+Lives ran out after exactly three shifts reached the death row. **Not
+verified by eye:** how Circles and Tilt look, Mode Select's layout, and HUD
+placement. F5 before trusting any of those.
+

@@ -8,6 +8,9 @@ signal block_damaged(block: Block, damage: int)
 
 var rules: GameRules
 var direction := Vector2.UP
+## Bounces so far (walls and blocks), counted after each contact's damage.
+## Generic ball state for BALL_COLLISION mods (Snowball today).
+var bounces: int = 0
 var _age := 0.0
 var _done := false
 
@@ -74,13 +77,19 @@ func _physics_process(delta: float) -> void:
 
 		var normal := collision.get_normal()
 		var collider := collision.get_collider()
+		var is_wall := collider is Node and (collider as Node).is_in_group("wall")
+		# A WALL mod may take the contact over (Wrap Around teleports the
+		# ball); it then skips the bounce entirely.
+		if is_wall and rules.on_wall_hit(self, collision):
+			continue
 		direction = direction.bounce(normal).normalized()
 
 		if collider is Block:
-			var dealt: int = (collider as Block).hit(rules.ball_damage)
+			var dealt: int = (collider as Block).hit(rules.damage_for(self))
 			block_damaged.emit(collider, dealt)
-		elif collider is Node and (collider as Node).is_in_group("wall"):
+		elif is_wall:
 			_apply_corner_jitter(collision.get_position())
+		bounces += 1
 
 		_enforce_vertical()
 		# Ease off the surface so the next substep does not start embedded.

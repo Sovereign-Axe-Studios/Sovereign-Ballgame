@@ -14,7 +14,7 @@ const INITIAL_SPEED := 60.0
 
 var _radius: float = 17.0
 var _floor_y: float = 0.0
-var _speed: float = INITIAL_SPEED
+var _speed: float = -INITIAL_SPEED
 
 func setup(radius: float, floor_y: float) -> void:
 	_radius = radius

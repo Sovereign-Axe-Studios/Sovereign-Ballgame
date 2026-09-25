@@ -27,6 +27,7 @@ var _debug_page: Control
 var _skins_page: Control
 var _current_page: Control
 
+var _mode_label: Label
 var _debug_toggle: Button
 var _debug_explainer: Label
 var _invincible_toggle: Button
@@ -93,6 +94,7 @@ func _show_page(page: Control) -> void:
 	_skins_page.visible = page == _skins_page
 
 func _sync_fields() -> void:
+	_mode_label.text = _mode_summary()
 	_debug_toggle.button_pressed = Debug.enabled
 	_debug_explainer.visible = Debug.enabled
 	_invincible_toggle.button_pressed = Debug.invincible
@@ -175,6 +177,8 @@ func _page_column() -> VBoxContainer:
 func _build_root_page() -> VBoxContainer:
 	var col := _page_column()
 	col.add_child(_header("PAUSED"))
+	_mode_label = _label("", LABEL_FONT_SIZE)
+	col.add_child(_mode_label)
 
 	var resume_btn := _button("Resume", true)
 	resume_btn.pressed.connect(close)
@@ -344,6 +348,15 @@ func _build_debug_page() -> VBoxContainer:
 
 
 # --------------------------------------------------------------- ui helpers
+
+## "Mode: Tilt -- Spread, 15° Tilt, Wrap Around". Read on open, not at build
+## time: this menu is built before Game._ready installs the mods.
+func _mode_summary() -> String:
+	var names: Array[String] = []
+	for mod in _game.rules.active_mods():
+		names.append(mod.display_name)
+	var mods := ", ".join(names) if not names.is_empty() else "no mods"
+	return "Mode: %s -- %s" % [Run.mode_name, mods]
 
 func _header(text: String) -> Label:
 	return _label(text, HEADER_FONT_SIZE)

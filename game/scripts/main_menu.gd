@@ -1,6 +1,7 @@
 class_name MainMenu
 extends Node2D
-## Title screen: Play / Settings / States (stub) / Asset Viewer.
+## Title screen: Quick Play / Play / Settings / States (stub) / Asset Viewer.
+## Quick Play starts a no-mods run immediately; Play opens Mode Select.
 ##
 ## Built in code, no .tscn UI -- consistent with every other screen in this
 ## project (see docs/HANDOFF.md §7). Settings is an in-place overlay (same
@@ -9,7 +10,7 @@ extends Node2D
 ## screen, not a dialog. States is a stub -- there's no save-state system yet
 ## (see the Debug Menu's own "Save game state" stub).
 
-const GAME_SCENE := "res://scenes/main.tscn"
+const MODE_SELECT_SCENE := "res://scenes/mode_select.tscn"
 const ASSET_VIEWER_SCENE := "res://scenes/asset_viewer.tscn"
 const STAR_COUNT := 70
 
@@ -125,58 +126,28 @@ func _build_ui() -> void:
 	button_col.add_theme_constant_override("separation", 26)
 	_root.add_child(button_col)
 
-	var play_btn := _arcade_button("▶ PLAY")
-	play_btn.pressed.connect(func() -> void: get_tree().change_scene_to_file(GAME_SCENE))
+	var quick_btn := ArcadeUI.button("⚡ QUICK PLAY")
+	quick_btn.pressed.connect(func() -> void: Run.start("Quick Play", []))
+	button_col.add_child(quick_btn)
+
+	var play_btn := ArcadeUI.button("▶ PLAY")
+	play_btn.pressed.connect(func() -> void: get_tree().change_scene_to_file(MODE_SELECT_SCENE))
 	button_col.add_child(play_btn)
 
-	var settings_btn := _arcade_button("⚙ SETTINGS")
+	var settings_btn := ArcadeUI.button("⚙ SETTINGS")
 	settings_btn.pressed.connect(_open_settings)
 	button_col.add_child(settings_btn)
 
-	var states_btn := _arcade_button("\U0001f4be STATES")
+	var states_btn := ArcadeUI.button("👾 GAME STATES")
 	states_btn.disabled = true
 	states_btn.tooltip_text = "Stub -- no save-state system yet (see the Debug Menu's Save game state stub)."
 	button_col.add_child(states_btn)
 
-	var viewer_btn := _arcade_button("◆ ASSET VIEWER")
+	var viewer_btn := ArcadeUI.button("◆ ASSET VIEWER")
 	viewer_btn.pressed.connect(func() -> void: get_tree().change_scene_to_file(ASSET_VIEWER_SCENE))
 	button_col.add_child(viewer_btn)
 
 	_build_settings_overlay(layer, vp)
-
-func _arcade_button(text: String) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.custom_minimum_size = Vector2(0.0, 92.0)
-	b.add_theme_font_size_override("font_size", 34)
-	b.add_theme_stylebox_override("normal", _arcade_style(false))
-	b.add_theme_stylebox_override("hover", _arcade_style(true))
-	b.add_theme_stylebox_override("pressed", _arcade_style(true))
-	b.add_theme_stylebox_override("disabled", _arcade_disabled_style())
-	b.add_theme_color_override("font_color", Skins.ball().color)
-	b.add_theme_color_override("font_disabled_color", Palette.TEXT_DIM)
-	return b
-
-## Sharp corners + a neon border -- the pixelated-arcade look, distinct from
-## the pause menu's rounded style so the title screen reads as its own place.
-func _arcade_style(lit: bool) -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("#12313a") if lit else Color("#0e1a20")
-	sb.border_color = Skins.ball().color
-	sb.set_border_width_all(3)
-	sb.set_corner_radius_all(0)
-	sb.content_margin_left = 24.0
-	sb.content_margin_right = 24.0
-	sb.content_margin_top = 16.0
-	sb.content_margin_bottom = 16.0
-	return sb
-
-func _arcade_disabled_style() -> StyleBoxFlat:
-	var sb := _arcade_style(false)
-	sb.border_color = Palette.TEXT_DIM
-	sb.bg_color = Color("#0a0d12")
-	return sb
-
 
 # ------------------------------------------------------------ settings overlay
 
@@ -239,7 +210,7 @@ func _build_settings_overlay(layer: CanvasLayer, vp: Vector2) -> void:
 	_music_slider = _slider_row(col, "Music volume", 0.0, 100.0)
 	_music_slider.value_changed.connect(func(v: float) -> void: Settings.set_music_volume(v / 100.0))
 
-	_grid_toggle = _arcade_button("Show background grid")
+	_grid_toggle = ArcadeUI.button("Show background grid")
 	_grid_toggle.toggle_mode = true
 	_grid_toggle.custom_minimum_size.y = 76.0
 	_grid_toggle.toggled.connect(func(pressed: bool) -> void: Settings.set_show_background_grid(pressed))
@@ -249,7 +220,7 @@ func _build_settings_overlay(layer: CanvasLayer, vp: Vector2) -> void:
 	_grid_thickness_slider.step = 0.5
 	_grid_thickness_slider.value_changed.connect(func(v: float) -> void: Settings.set_grid_line_thickness(v))
 
-	var back_btn := _arcade_button("BACK")
+	var back_btn := ArcadeUI.button("BACK")
 	back_btn.pressed.connect(_close_settings)
 	col.add_child(back_btn)
 

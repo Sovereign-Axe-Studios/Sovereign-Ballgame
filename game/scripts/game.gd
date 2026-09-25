@@ -58,6 +58,8 @@ func _ready() -> void:
 	randomize()
 	if rules == null:
 		rules = GameRules.new()
+	# Before layout: GRID mods change the board size.
+	rules.install(Run.make_mods())
 
 	grid.pickup_collected.connect(_on_pickup_collected)
 	grid.block_destroyed.connect(_on_block_destroyed)
@@ -222,7 +224,11 @@ func _tick_firing(delta: float) -> void:
 func _spawn_ball() -> void:
 	var ball: Ball = BallScene.instantiate()
 	balls_root.add_child(ball)
-	ball.launch(rules, _fire_origin, shooter.aim_direction())
+	var aim_direction := shooter.aim_direction()
+	if rules.random_rotate_value_deg != 0.0:
+		var spread := deg_to_rad(rules.random_rotate_value_deg)
+		aim_direction = aim_direction.rotated(randf_range(-spread, spread))
+	ball.launch(rules, _fire_origin, aim_direction)
 	ball.finished.connect(_on_ball_finished)
 	ball.block_damaged.connect(_on_block_damaged)
 	_live_balls += 1
@@ -357,7 +363,7 @@ func _game_over() -> void:
 	hud.show_game_over(round_number, total_damage)
 
 func _refresh_hud() -> void:
-	hud.refresh(round_number, ball_count, pending_balls, round_damage, total_damage)
+	hud.refresh(round_number, ball_count, pending_balls, round_damage, total_damage, rules.status_lines())
 	debug_overlay.refresh_readouts()
 
 

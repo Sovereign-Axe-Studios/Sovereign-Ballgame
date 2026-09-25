@@ -71,11 +71,13 @@
       last shot), instead of dimming/hiding until the round resolves
 
 ## Modularity basics
-- [~] `GameRules` resource holds every value; `row_budget`, `cell_cap` and
-      `shots_for_round` are the first virtual hooks
-- [ ] Categories: shot spread · ball collision · wall mods · spawn direction ·
-      grid shape · density · rotation · loss condition
-- [ ] One example mod per category
+- [x] `GameRules` resource holds every value, plus one `GameMod` slot per
+      category that every hook delegates to (HANDOFF §14)
+- [x] Categories: shot spread · ball collision · wall mods · spawn direction ·
+      shape · rotation · density · grid · loss condition
+- [x] One example mod per category: Spread, Snowball, Wrap Around, Circles,
+      15° Tilt, Boss, 9x11 Grid, Lives. Spawn direction deferred --
+      Reinforcements is listed greyed out
 - [ ] Two mods per category
 - [ ] Combine mods across all categories at once
 
@@ -92,7 +94,9 @@
 - [x] Asset Viewer (`scenes/asset_viewer.tscn`): tabbed Skins / Modes / Audio,
       showing what the project actually has, not padded with placeholders
       for content (ships, bosses, etc.) that has no equivalent here
-- [~] Mod menu (stub button on the Debug Menu page only, no mod list yet) ·
+- [~] Mod menu: Play -> Mode Select (2 placeholder curated modes + Custom
+      one-per-category picker), Quick Play on the title screen. No per-mod
+      value editing, icons, or persistence yet ·
       settings ([x] UI scale, SFX/music volume — no sounds routed yet;
       screen shake strength plumbed, unconsumed; [x] debug menu)
 - [ ] Persistence across scenes: high scores, active mods

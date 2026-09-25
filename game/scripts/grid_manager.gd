@@ -105,6 +105,7 @@ func _place_block(value: int, col: int, row: int) -> Block:
 	add_child(block)
 	block.position = cell_center(col, row)
 	block.setup(value, cell_size, col, row)
+	rules.configure_block(block)
 	block.destroyed.connect(_on_block_destroyed)
 	cells[row][col] = block
 	return block
@@ -130,13 +131,14 @@ func _maybe_place_pickup() -> void:
 
 # ------------------------------------------------------------------ shifting
 
-## Move everything down one row. Returns true if a Block ended up in the death
-## row, which is the loss condition.
+## Move everything down one row. Returns true if the run is lost: a Block
+## ended up in the death row and neither Debug.invincible nor the LOSS mod
+## (`rules.on_death_row_reached`) absorbed it.
 func advance() -> bool:
 	var h := rules.grid_height
 	var w := rules.grid_width
 	var death := rules.death_row()
-	var lost := false
+	var reached: Array[Block] = []
 
 	# The death row should already be empty (we lose the instant anything lands
 	# there). Belt and braces in case a mod changes death_row_override.
@@ -159,16 +161,17 @@ func advance() -> bool:
 			n.grid_row = row
 			_slide(n, col, row)
 			if row >= death and n is Block:
-				if Debug.invincible:
-					# Destroy it (through the normal Block.hit path, so the
-					# usual destroy fragments/signals still fire) instead of
-					# ending the run.
-					var block := n as Block
-					cells[row][col] = null
-					block.hit(block.value)
-				else:
-					lost = true
-	return lost
+				reached.append(n as Block)
+
+	if reached.is_empty():
+		return false
+	if Debug.invincible:
+		# Debug wins over any mod. Destroy them through the normal Block.hit
+		# path, so the usual destroy fragments/signals still fire.
+		for block in reached:
+			block.hit(block.value)
+		return false
+	return not rules.on_death_row_reached(reached)
 
 ## Debug helper: pull the field back up one row.
 func shift_up() -> void:

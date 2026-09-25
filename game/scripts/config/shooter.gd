@@ -9,3 +9,6 @@
 const MAX_AIM_DEGREES: float = 78.0
 ## Degrees per second while an aim key is held.
 const AIM_SPEED_DEGREES: float = 90.0
+## Random spread per ball: each launch is rotated by up to +/- this many
+## degrees. 0.0 is perfect accuracy.
+const RANDOM_ROTATE_VALUE_DEG: float = 0.0

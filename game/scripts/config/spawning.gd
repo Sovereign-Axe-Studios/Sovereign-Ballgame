@@ -8,7 +8,7 @@
 ## of 3, and every block it makes is a multiple of 3: 3, 6, 9, 12... Density
 ## mods (Dense, Solid, Boss, Mafia, Pawn wall) move this number.
 
-const UNITS_PER_COLUMN: float = 1.0
+const UNITS_PER_COLUMN: float = 0.75
 
 ## How many columns a new row leaves empty, picked per row from this range.
 ## At least one, always: a sealed row is a dead round.
