@@ -39,9 +39,10 @@ func _ready() -> void:
 	Debug.enabled_changed.connect(_on_debug_enabled_changed)
 	Settings.changed.connect(_apply_ui_scale)
 	_apply_ui_scale()
+	# Row buttons are NOT built here: this _ready runs before Game's, so the
+	# grid has no layout yet. Game._ready calls refresh_row_buttons() once the
+	# playfield exists.
 	visible = Debug.enabled
-	if visible:
-		refresh_row_buttons()
 
 func _apply_ui_scale() -> void:
 	_ui_root.scale = Vector2.ONE * Settings.ui_scale

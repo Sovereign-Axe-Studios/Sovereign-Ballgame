@@ -46,12 +46,65 @@ func aim_at(world_point: Vector2) -> void:
 func raw_aim_degrees(world_point: Vector2) -> float:
 	return rad_to_deg(Vector2.UP.angle_to(world_point - global_position))
 
+## Muzzle flash length, seconds (Orbital Probe Cannon only).
+const FLASH_SECONDS := 0.12
+
+var _flash: float = 0.0
+
+## A shot just left. Only the probe cannon shows it.
+func flash() -> void:
+	if Skins.launcher().shape != Skins.LauncherShape.PROBE_CANNON:
+		return
+	_flash = FLASH_SECONDS
+	set_process(true)
+
+func _process(delta: float) -> void:
+	_flash = maxf(0.0, _flash - delta)
+	queue_redraw()
+	if _flash <= 0.0:
+		set_process(false)
+
 func _draw() -> void:
 	match Skins.launcher().shape:
 		Skins.LauncherShape.CANNON:
 			_draw_cannon()
+		Skins.LauncherShape.PROBE_CANNON:
+			var dir := aim_direction() if active else Vector2.UP
+			draw_probe_cannon(self, Vector2.ZERO, dir, 1.0, _flash / FLASH_SECONDS, active)
 		_:
 			_draw_ball_launcher()
+
+## The Orbital Probe Cannon: a long segmented barrel with three ring bands
+## and a glowing muzzle, on a heavy base. Static so the skin swatches can
+## draw the same thing small. `flash` 0..1 is the muzzle flare.
+static func draw_probe_cannon(c: CanvasItem, at: Vector2, dir: Vector2, scale: float,
+		flash: float = 0.0, lit: bool = true) -> void:
+	var dim := 1.0 if lit else 0.6
+	var hull := Color("#8a7a5c").darkened(1.0 - dim)
+	var hull_dark := Color("#3b342a").darkened(1.0 - dim)
+	var band := Color("#c9a86a").darkened(1.0 - dim)
+	var glow := Color("#9fe3ff")
+	var perp := dir.orthogonal()
+
+	c.draw_circle(at, 30.0 * scale, hull_dark)
+	c.draw_circle(at, 22.0 * scale, hull)
+	var length := 70.0 * scale
+	var half_w := 11.0 * scale
+	var tip := at + dir * length
+	c.draw_colored_polygon(PackedVector2Array([
+		at + perp * half_w, at - perp * half_w, tip - perp * half_w * 0.8, tip + perp * half_w * 0.8,
+	]), hull)
+	for f in [0.35, 0.6, 0.85]:
+		var p: Vector2 = at + dir * length * f
+		var w := half_w * 1.35
+		c.draw_line(p + perp * w, p - perp * w, band, 5.0 * scale)
+	c.draw_circle(tip, half_w * 0.75, Color(glow, 0.5 + 0.5 * dim))
+	if flash > 0.0:
+		c.draw_circle(tip + dir * 8.0 * scale, half_w * (1.2 + 1.5 * flash), Color(glow, flash))
+	if lit:
+		for i in range(2, 16):
+			var alpha := clampf(0.7 - float(i) * 0.045, 0.05, 0.7)
+			c.draw_circle(tip + dir * (float(i) * 34.0 * scale), 4.0 * scale, Color(glow, alpha))
 
 func _draw_ball_launcher() -> void:
 	var base := Skins.ball().color

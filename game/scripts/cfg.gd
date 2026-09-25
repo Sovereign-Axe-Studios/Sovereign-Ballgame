@@ -86,7 +86,9 @@ const FRAGMENT_ROWS_MIN := Juice.FRAGMENT_ROWS_MIN
 # parse, and that error is the guard.
 const Spread := preload("res://scripts/mods/shot_spread/spread.gd")
 const Snowball := preload("res://scripts/mods/ball_collision/snowball.gd")
+const TimeRewind := preload("res://scripts/mods/ball_collision/time_rewind.gd")
 const WrapAround := preload("res://scripts/mods/wall/wrap_around.gd")
+const Wormholes := preload("res://scripts/mods/wall/wormholes.gd")
 const Reinforcements := preload("res://scripts/mods/spawn_direction/reinforcements.gd")
 const Circles := preload("res://scripts/mods/shape/circles.gd")
 const Rotated := preload("res://scripts/mods/rotation/rotated.gd")
@@ -95,6 +97,6 @@ const ModifiedGrid := preload("res://scripts/mods/grid/modified_grid.gd")
 const Lives := preload("res://scripts/mods/loss/lives.gd")
 
 const MODS: Array[GDScript] = [
-	Spread, Snowball, WrapAround, Reinforcements, Circles, Rotated,
+	Spread, Snowball, TimeRewind, WrapAround, Wormholes, Reinforcements, Circles, Rotated,
 	Boss, ModifiedGrid, Lives,
 ]

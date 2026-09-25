@@ -95,12 +95,17 @@
       showing what the project actually has, not padded with placeholders
       for content (ships, bosses, etc.) that has no equivalent here
 - [~] Mod menu: Play -> Mode Select (2 placeholder curated modes + Custom
-      one-per-category picker), Quick Play on the title screen. No per-mod
-      value editing, icons, or persistence yet ·
+      character-select grid: animated tile icons, ? detail panel with a live
+      mini-board), Quick Play on the title screen. No per-mod value editing
+      or persisting the chosen mods yet. Revisit the layout (tabs / loadout
+      slots) once categories hold ~6-12 mods ·
       settings ([x] UI scale, SFX/music volume — no sounds routed yet;
       screen shake strength plumbed, unconsumed; [x] debug menu)
 - [ ] Persistence across scenes: high scores, active mods
-- [ ] Mod unlocking — new random mod every 25 rounds, with an unlock visual
+- [~] Mod unlocking: the `Unlocks` system exists (persisted, locked `???`
+      tiles and skin chips). First unlock is the Outer Wilds constellation on
+      the title screen (HANDOFF §15). The GDD's "new random mod every 25
+      rounds" is not built
 - [ ] Audio: BG, SFX, button click, collection, milestone stingers
 - [ ] Consumables from milestones: delete a tile, shift up, 2048 slam,
       tapsplosion
@@ -118,7 +123,7 @@ the current code, so none of this needs a rewrite:
 | --- | --- |
 | Shot spread (Spread, Sprinkler, Short lifetime, Zig Zag) | `Game._spawn_ball` direction + a per-ball behaviour resource |
 | Ball collision (Ghost, Missiles, Fracture, Infection, Group up, Poison, Gravity, Self collision, Billiards, Snowball, Buildup, Sniper) | `Ball._physics_process` bounce handler + `GameRules.shots_for_round` |
-| Wall mods (Wrap around, Bounce pierce, Portals) | `Game._build_walls` + the wall branch in `Ball._physics_process` |
+| Wall mods (Wrap around, Bounce pierce, Portals) | `Playfield.build_walls` + `GameMod.on_wall_hit` / `on_ball_moved` |
 | Spawn direction (Sidewinder, Left/right march, Inverse, Reinforcements, Virus) | `GridManager.spawn_row` / `advance` |
 | Shape (Circles, Octagon, Triangle) | `Block` collision shape + `_draw` |
 | Rotation | `Block.rotation` at placement |

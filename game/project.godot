@@ -25,6 +25,7 @@ buses/default_bus_layout="res://audio/bus_layout.tres"
 Cfg="*res://scripts/cfg.gd"
 Debug="*res://scripts/debug_state.gd"
 Settings="*res://scripts/settings_state.gd"
+Unlocks="*res://scripts/unlocks_state.gd"
 Skins="*res://scripts/skins.gd"
 Run="*res://scripts/run_state.gd"
 

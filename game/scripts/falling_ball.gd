@@ -12,6 +12,9 @@ signal landed(ball: FallingBall)
 const GRAVITY := 1400.0
 const INITIAL_SPEED := 60.0
 
+## Set by Game._end_round when the round resolves before this lands, so
+## the landing doesn't count the same ball twice.
+var credited: bool = false
 var _radius: float = 17.0
 var _floor_y: float = 0.0
 var _speed: float = -INITIAL_SPEED

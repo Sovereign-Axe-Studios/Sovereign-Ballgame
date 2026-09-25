@@ -112,6 +112,15 @@ const _Juice := preload("res://scripts/config/juice.gd")
 @export var fragment_rows_min: int = _Juice.FRAGMENT_ROWS_MIN
 @export var fragment_rows_max: int = _Juice.FRAGMENT_ROWS_MAX
 
+# ------------------------------------------------------------ runtime layout
+# Not tunables: set by whoever lays the board out (Game._layout_playfield,
+# ModLivePreview), so wall-aware code (corner jitter, Wrap Around) works on
+# any board size instead of assuming the 1080-wide screen.
+
+## X of the inner face of the left / right side wall.
+var play_left: float = 0.0
+var play_right: float = 0.0
+
 # ---------------------------------------------------------------- mod slots
 
 ## Category -> installed GameMod. A category with no entry answers with
@@ -123,8 +132,8 @@ var _stock := GameMod.new()
 ## tweaks. One mod per category: a second one replaces the first.
 func install(mods: Array[GameMod]) -> void:
 	for mod in mods:
-		if not mod.available:
-			push_warning("GameRules.install: skipping unavailable mod '%s'" % mod.display_name)
+		if not mod.is_selectable():
+			push_warning("GameRules.install: skipping unavailable or locked mod '%s'" % mod.display_name)
 			continue
 		if _slots.has(mod.category):
 			push_warning("GameRules.install: '%s' replaces '%s' in %s" % [
@@ -166,9 +175,29 @@ func open_slots() -> int:
 func shots_for_round(ball_count: int) -> int:
 	return _slot(GameMod.Category.BALL_COLLISION).shots_for_round(self, ball_count)
 
+func wants_path_recording() -> bool:
+	return _slot(GameMod.Category.BALL_COLLISION).wants_path_recording(self)
+
+func on_firing_tick(game: Game, seconds: float) -> void:
+	_slot(GameMod.Category.BALL_COLLISION).on_firing_tick(self, game, seconds)
+
 ## Damage `ball` deals on a block contact.
 func damage_for(ball: Ball) -> int:
 	return _slot(GameMod.Category.BALL_COLLISION).damage_for(self, ball)
+
+## After each Ball physics frame's movement.
+func on_ball_moved(ball: Ball) -> void:
+	_slot(GameMod.Category.WALL).on_ball_moved(self, ball)
+
+## Every installed mod, in Category order: the board is laid out.
+func on_run_start(field: Playfield) -> void:
+	for mod in active_mods():
+		mod.on_run_start(self, field)
+
+## Every installed mod, in Category order: a round resolved.
+func on_round_end(field: Playfield) -> void:
+	for mod in active_mods():
+		mod.on_round_end(self, field)
 
 ## True = the WALL mod handled this contact; the ball skips its bounce.
 func on_wall_hit(ball: Ball, collision: KinematicCollision2D) -> bool:
@@ -185,6 +214,14 @@ func death_row() -> int:
 ## True = the run continues (the LOSS mod cleared `blocks`).
 func on_death_row_reached(blocks: Array[Block]) -> bool:
 	return _slot(GameMod.Category.LOSS).on_death_row_reached(self, blocks)
+
+## `aim` wobbled by up to +/- random_rotate_value_deg (Spread). Shared by
+## Game and the ? panel's live preview so both fire the same way.
+func spread_direction(aim: Vector2) -> Vector2:
+	if random_rotate_value_deg == 0.0:
+		return aim
+	var spread := deg_to_rad(random_rotate_value_deg)
+	return aim.rotated(randf_range(-spread, spread))
 
 ## Every installed mod's non-empty HUD line.
 func status_lines() -> Array[String]:

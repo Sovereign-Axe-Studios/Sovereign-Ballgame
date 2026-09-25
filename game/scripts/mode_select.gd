@@ -3,14 +3,23 @@ extends Node2D
 ## Play -> pick a mode. Two pages:
 ##   List:   the curated modes (CuratedModes.all()), then CUSTOM, then BACK.
 ##           A curated mode starts the run immediately.
-##   Custom: one row per GameMod.Category -- a chip for None plus each of that
-##           category's mods from Cfg.MODS. NEXT starts the run.
+##   Custom: a character-select grid -- one neon row per GameMod.Category,
+##           a tile for None plus each of that category's mods from Cfg.MODS.
+##           Tiles animate their draw_preview on hover; the ? corner opens a
+##           detail panel with a live mini-board (ModLivePreview). Locked mods
+##           show as ??? silhouettes. NEXT starts the run.
 ## Built in code in the title screen's arcade style (ArcadeUI), like every
 ## other screen here. Esc steps back a page, then to the title screen.
 
 const TITLE_SCENE := "res://scenes/main_menu.tscn"
 const PAGE_WIDTH := 880.0
+const TILE_SIZE := Vector2(156.0, 172.0)
+const ICON_SIZE := 112.0
+const DETAIL_PREVIEW_SIZE := Vector2(420.0, 560.0)
+const LOCKED_HINT := "Look to the stars."
 
+var _root: Control
+var _detail: Control
 var _list_page: Control
 var _custom_page: Control
 ## Category -> the GDScript picked on the Custom page (absent = None).
@@ -23,7 +32,9 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_action_pressed("pause"):
 		return
-	if _custom_page.visible:
+	if _detail != null:
+		_close_detail()
+	elif _custom_page.visible:
 		_show(_list_page)
 	else:
 		get_tree().change_scene_to_file(TITLE_SCENE)
@@ -55,15 +66,15 @@ func _start_custom() -> void:
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
-	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(root)
+	_root = Control.new()
+	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_root)
 
 	_list_page = _build_list_page()
-	root.add_child(_list_page)
+	_root.add_child(_list_page)
 	_custom_page = _build_custom_page()
-	root.add_child(_custom_page)
+	_root.add_child(_custom_page)
 
 ## A full-screen scroll page with a centred column of PAGE_WIDTH.
 func _page(title: String) -> Array:
@@ -156,41 +167,142 @@ func _build_custom_page() -> Control:
 	col.add_child(nav)
 	return parts[0]
 
-## Category title, a chip per option (None first), and the selected option's
-## description underneath. `entries` is [[script, instance], ...].
+## Character-select row: a neon category header, then a tile per option
+## (None first). `entries` is [[script, instance], ...].
 func _category_row(c: GameMod.Category, entries: Array) -> VBoxContainer:
 	var row := VBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	row.add_child(ArcadeUI.label(GameMod.category_name(c).to_upper(), 30))
+	row.add_theme_constant_override("separation", 12)
+	row.add_child(ArcadeUI.label("▌" + GameMod.category_name(c).to_upper(), 30, Skins.ball().color))
 
-	var chips := HFlowContainer.new()
-	chips.add_theme_constant_override("h_separation", 12)
-	chips.add_theme_constant_override("v_separation", 12)
-	row.add_child(chips)
+	var tiles := HFlowContainer.new()
+	tiles.add_theme_constant_override("h_separation", 14)
+	tiles.add_theme_constant_override("v_separation", 14)
+	row.add_child(tiles)
 
-	var desc := ArcadeUI.label("Stock rules.", 22, Palette.TEXT_DIM)
 	var group := ButtonGroup.new()
-
-	var none := ArcadeUI.chip("None")
+	var none := _tile(null, false)
 	none.button_group = group
 	none.button_pressed = true
-	none.pressed.connect(func() -> void:
-		_picks.erase(c)
-		desc.text = "Stock rules.")
-	chips.add_child(none)
+	none.pressed.connect(func() -> void: _picks.erase(c))
+	tiles.add_child(none)
 
 	for entry: Array in entries:
 		var script: GDScript = entry[0]
 		var mod: GameMod = entry[1]
-		var chip := ArcadeUI.chip(mod.display_name)
-		chip.button_group = group
-		chip.tooltip_text = mod.description
-		chip.disabled = not mod.available
-		chip.pressed.connect(func() -> void:
-			_picks[c] = script
-			desc.text = mod.description)
-		chips.add_child(chip)
+		var locked := not Unlocks.is_unlocked(mod.locked_by)
+		var tile := _tile(mod, locked)
+		tile.button_group = group
+		tile.pressed.connect(func() -> void: _picks[c] = script)
+		tiles.add_child(tile)
 
-	row.add_child(desc)
-	row.add_child(_spacer(8.0))
+	row.add_child(_spacer(6.0))
 	return row
+
+## One mod tile: animated icon + name, and a ? corner button that opens the
+## detail panel. `mod == null` is the None tile.
+func _tile(mod: GameMod, locked: bool) -> Button:
+	var tile := ArcadeUI.chip("")
+	tile.custom_minimum_size = TILE_SIZE
+	tile.clip_contents = true
+
+	var icon := ModPreviewIcon.new(mod, locked)
+	icon.position = Vector2((TILE_SIZE.x - ICON_SIZE) * 0.5, 14.0)
+	icon.size = Vector2.ONE * ICON_SIZE
+	tile.add_child(icon)
+
+	var label_text := "None"
+	if mod != null:
+		label_text = "???" if locked else mod.display_name
+	var name_label := ArcadeUI.label(label_text, 20, Palette.TEXT)
+	name_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	name_label.clip_text = true
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.position = Vector2(6.0, 14.0 + ICON_SIZE + 6.0)
+	name_label.size = Vector2(TILE_SIZE.x - 12.0, 30.0)
+	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tile.add_child(name_label)
+
+	if mod == null:
+		tile.tooltip_text = "Stock rules for this category."
+		return tile
+	if locked:
+		tile.disabled = true
+		tile.tooltip_text = LOCKED_HINT
+		return tile
+	tile.tooltip_text = mod.description
+	tile.disabled = not mod.available
+	tile.mouse_entered.connect(func() -> void: icon.playing = true)
+	tile.mouse_exited.connect(func() -> void: icon.playing = false)
+
+	var help := Button.new()
+	help.text = "?"
+	help.focus_mode = Control.FOCUS_NONE
+	help.add_theme_font_size_override("font_size", 22)
+	help.add_theme_color_override("font_color", PreviewDraw.GLOW)
+	for state in ["normal", "hover", "pressed"]:
+		var sb := ArcadeUI.style(state != "normal")
+		sb.set_content_margin_all(2.0)
+		sb.set_border_width_all(2)
+		help.add_theme_stylebox_override(state, sb)
+	help.size = Vector2(34.0, 34.0)
+	help.position = Vector2(TILE_SIZE.x - 38.0, 4.0)
+	help.tooltip_text = "What does this do?"
+	help.pressed.connect(func() -> void: _open_detail(mod))
+	tile.add_child(help)
+	return tile
+
+
+# ------------------------------------------------------------- detail panel
+
+func _open_detail(mod: GameMod) -> void:
+	_close_detail()
+	_detail = Control.new()
+	_detail.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_detail.mouse_filter = Control.MOUSE_FILTER_STOP
+	_root.add_child(_detail)
+
+	var dim := ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0, 0, 0, 0.75)
+	dim.gui_input.connect(func(e: InputEvent) -> void:
+		if e is InputEventMouseButton and (e as InputEventMouseButton).pressed:
+			_close_detail())
+	_detail.add_child(dim)
+
+	var vp := _viewport_size()
+	var panel := PanelContainer.new()
+	var panel_style := ArcadeUI.style(false)
+	panel_style.set_content_margin_all(32.0)
+	panel.add_theme_stylebox_override("panel", panel_style)
+	panel.custom_minimum_size = Vector2(PAGE_WIDTH, 0.0)
+	panel.position = Vector2((vp.x - PAGE_WIDTH) * 0.5, 160.0)
+	_detail.add_child(panel)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 18)
+	panel.add_child(col)
+	col.add_child(ArcadeUI.label(GameMod.category_name(mod.category).to_upper(), 24, Palette.TEXT_DIM))
+	col.add_child(ArcadeUI.label(mod.display_name, 52, Skins.ball().color))
+	col.add_child(ArcadeUI.label(mod.description, 28))
+
+	var preview_box := CenterContainer.new()
+	col.add_child(preview_box)
+	# A fresh instance: the live board installs it into its own GameRules, and
+	# stateful mods (Lives) mustn't share state with the tile's copy.
+	var fresh := (mod.get_script() as GDScript).new() as GameMod
+	if fresh.live_preview:
+		preview_box.add_child(ModLivePreview.new(fresh, DETAIL_PREVIEW_SIZE))
+	else:
+		var big := ModPreviewIcon.new(fresh)
+		big.custom_minimum_size = Vector2.ONE * DETAIL_PREVIEW_SIZE.x
+		big.playing = true
+		preview_box.add_child(big)
+
+	var close_btn := ArcadeUI.button("CLOSE")
+	close_btn.pressed.connect(_close_detail)
+	col.add_child(close_btn)
+
+func _close_detail() -> void:
+	if _detail != null:
+		_detail.queue_free()
+		_detail = null

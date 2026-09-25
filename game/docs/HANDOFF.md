@@ -778,3 +778,95 @@ Lives ran out after exactly three shifts reached the death row. **Not
 verified by eye:** how Circles and Tilt look, Mode Select's layout, and HUD
 placement. F5 before trusting any of those.
 
+---
+
+## 15. Mod menu redesign + the Outer Wilds extras
+
+Design: `docs/specs/2026-09-25-mod-menu-and-outer-wilds-design.md`.
+
+### Mod menu
+
+- **Custom** in Mode Select is a character-select grid: a neon row per
+  category, a tile per mod (None first). The tile icon is
+  `GameMod.draw_preview(canvas, rect, 0)` via `ModPreviewIcon`, and hovering
+  plays it. Locked mods are `???` silhouettes whose tooltip reads "Look to the
+  stars."
+- The **?** corner opens a detail panel. `ModLivePreview` is a 4x5 board in
+  its own `SubViewport` + `World2D`, running the real GridManager/Ball/Block
+  with that one mod installed. It uses scripted aim (`AIM_SCRIPT`), half-speed
+  balls (`SPEED_SCALE`), and refills when cleared; no pickups, no shifting.
+  Mods with `live_preview = false` (Lives, 9x11 Grid, Time Rewind) loop their
+  sketch full-size instead.
+- To make the preview possible: walls moved to `Playfield.build_walls`, the
+  spread wobble moved to `GameRules.spread_direction`, and the wall bounds
+  became `rules.play_left/right` (runtime) instead of the viewport width.
+
+### Unlocks
+
+`Unlocks` autoload (`scripts/unlocks_state.gd`), `user://unlocks.cfg`. One
+id so far, `Unlocks.OUTER_WILDS`. Debug Menu: **Unlock all** / **Re-lock all**
+(skin pickers already built refresh on the next scene load). Re-locking resets
+any selected locked skin back to the first one.
+
+### The constellation
+
+`NomaiConstellation` (`scripts/title/nomai_constellation.gd`), added by
+`MainMenu`: 20 hand-placed points + 20 edges tracing the emblem, in `AREA`
+behind the title. Warm tint, half-speed twinkle, pulse on hover, 28 px click
+radius. Clicks light stars in any order; an edge fades in once both ends are
+lit. All lit -> bloom, `completed`, and MainMenu saves the unlock and shows
+the banner. Once unlocked it draws fully linked but dim and ignores clicks.
+Points are fractions of `AREA`, so reshaping it is editing `POINTS`/`EDGES`.
+
+### The two mods
+
+- **Wormholes** (`wall/wormholes.gd`): a black hole and a white hole in two
+  random empty cells (rows 1..death_row-1). A ball within `CAPTURE_FRACTION`
+  of a cell of the black hole exits the white hole with the same heading,
+  `EXIT_FRACTION` out, with a per-ball `REENTRY_COOLDOWN`. They relocate every
+  `RELOCATE_ROUNDS` rounds, or at once if a block/pickup shifts into either
+  cell; they close if fewer than 2 empty cells exist. Drawn by the inner
+  `WormholeVisual` node under `field.effects_root`.
+- **Time Rewind** (`ball_collision/time_rewind.gd`): `wants_path_recording`
+  makes every Ball record one point per physics frame (capped at
+  `Ball.MAX_PATH_POINTS`). At `REWIND_AFTER` (22 s) of the round's firing clock
+  (`Game._firing_time`), live balls `start_rewind(REWIND_SPEED)` (moved
+  directly along the path, so there are no collisions or damage, and they're
+  tinted blue), `Game.stop_firing()` cancels unfired shots, and a `RewindRing`
+  pulses from the shooter. A ball reaching its start point finishes normally.
+
+New hooks: `on_run_start` / `on_round_end` (every mod, get a `Playfield`),
+`on_ball_moved` (WALL), `wants_path_recording` / `on_firing_tick`
+(BALL_COLLISION).
+
+### The three skins (locked by `Unlocks.OUTER_WILDS`)
+
+- **Interloper** ball: `BallSkin.trail` / `trail_color` / `fleck_chance`.
+  `Ball` keeps `TRAIL_POINTS` positions and redraws each frame while the
+  skin has a trail.
+- **Orbital Probe Cannon** launcher: `LauncherShape.PROBE_CANNON`, drawn by
+  the static `Shooter.draw_probe_cannon` (the skin swatches reuse it).
+  `Shooter.flash()` is called per shot from `Game._spawn_ball`.
+- **End Times** background: `BackgroundSkin.animated`. `Game` adds an
+  `EndTimesBackground` (show_behind_parent) and skips its flat fill. The cycle
+  is `CYCLE_SECONDS` = 60: deaths from 5% to 80% (1 in 6 supernova), darkness,
+  a big bang at 86%, new stars settling from 88%.
+
+### Verified
+
+- `check_mods`: 11 mods (2 locked), and every sketch draws at t = 0 and 1.5.
+- Headless harnesses:
+  - Wormholes teleport balls and relocate.
+  - Time Rewind triggers at exactly 22.0 s, cancels unfired shots, and the
+    round resolves.
+  - Quick Play plus stock-mod combos still play to round 10.
+- Windowed screenshots:
+  - The Custom grid, locked and unlocked.
+  - The ? panel (live board and sketch fallback).
+  - The constellation partway and complete, plus the banner.
+  - All three skins in play with Wormholes.
+  - End Times at 50/87/94% of its cycle.
+- Tests that unlock things restored the real save afterwards.
+- **Not verified:** how the hover animations feel, the tooltips, and the
+  bloom timing, all of which need hands on a mouse.
+

@@ -11,6 +11,21 @@ var direction := Vector2.UP
 ## Bounces so far (walls and blocks), counted after each contact's damage.
 ## Generic ball state for BALL_COLLISION mods (Snowball today).
 var bounces: int = 0
+## Tint while rewinding (Time Rewind).
+const REWIND_COLOR := Color("#6fb6ff")
+## Path recording cap, in points (one per physics frame): 30 s at 120 Hz.
+const MAX_PATH_POINTS := 3600
+## One point per physics frame, only when rules.wants_path_recording().
+var _recording: bool = false
+var _path := PackedVector2Array()
+var _rewinding: bool = false
+var _rewind_cursor: float = 0.0
+var _rewind_speed: float = 1.0
+## Recent global positions for a skin's comet tail, newest last.
+const TRAIL_POINTS := 10
+var _trail := PackedVector2Array()
+## Ghost-matter flecks in the tail: [global position, seconds left].
+var _flecks: Array = []
 var _age := 0.0
 var _done := false
 
@@ -23,6 +38,9 @@ func launch(r: GameRules, from: Vector2, dir: Vector2) -> void:
 	rules = r
 	global_position = from
 	direction = dir.normalized()
+	_recording = r.wants_path_recording()
+	if _recording:
+		_path.append(from)
 	var circle := CircleShape2D.new()
 	circle.radius = r.ball_radius
 	_shape.shape = circle
@@ -57,6 +75,9 @@ func return_to(target: Vector2, duration: float, delay: float = 0.0) -> void:
 
 func _physics_process(delta: float) -> void:
 	if _done or rules == null:
+		return
+	if _rewinding:
+		_step_rewind()
 		return
 
 	_age += delta
@@ -95,16 +116,46 @@ func _physics_process(delta: float) -> void:
 		# Ease off the surface so the next substep does not start embedded.
 		global_position += normal * 0.5
 
+	rules.on_ball_moved(self)
+	_update_trail(delta)
+	if _recording and _path.size() < MAX_PATH_POINTS:
+		_path.append(global_position)
 	if global_position.y >= rules.floor_y:
 		_finish()
+
+## Time Rewind: play the recorded path backwards at `speed` x real time. The
+## ball stops colliding (it's moved directly, never via move_and_collide) and
+## finishes normally when it reaches where it was fired from.
+func start_rewind(speed: float) -> void:
+	if _done or _path.is_empty():
+		return
+	_rewinding = true
+	_rewind_speed = speed
+	_rewind_cursor = float(_path.size() - 1)
+	queue_redraw()
+
+func is_done() -> bool:
+	return _done
+
+func is_rewinding() -> bool:
+	return _rewinding
+
+func _step_rewind() -> void:
+	_rewind_cursor -= _rewind_speed
+	if _rewind_cursor <= 0.0:
+		global_position = _path[0]
+		_finish()
+		return
+	var i := int(_rewind_cursor)
+	global_position = _path[i].lerp(_path[mini(i + 1, _path.size() - 1)], _rewind_cursor - float(i))
 
 ## Near a corner, scatter the bounce slightly. Keeps balls from locking into a
 ## perfect repeating path, and gives corner shots the feel the spec asks for.
 func _apply_corner_jitter(point: Vector2) -> void:
 	if rules.corner_jitter_degrees <= 0.0:
 		return
-	var left := rules.side_margin
-	var right := float(ProjectSettings.get_setting("display/window/size/viewport_width")) - rules.side_margin
+	var left := rules.play_left
+	var right := rules.play_right
 	var corners := [
 		Vector2(left, rules.grid_top),
 		Vector2(right, rules.grid_top),
@@ -129,6 +180,23 @@ func _enforce_vertical() -> void:
 	direction.y = min_y * sign_y
 	direction = direction.normalized()
 
+func _update_trail(delta: float) -> void:
+	var skin := Skins.ball()
+	if not skin.trail:
+		if not _trail.is_empty():
+			_trail.clear()
+			_flecks.clear()
+		return
+	_trail.append(global_position)
+	if _trail.size() > TRAIL_POINTS:
+		_trail.remove_at(0)
+	if randf() < skin.fleck_chance and _trail.size() > 2:
+		_flecks.append([_trail[randi_range(0, _trail.size() - 2)], 0.4])
+	for fleck: Array in _flecks:
+		fleck[1] = float(fleck[1]) - delta
+	_flecks = _flecks.filter(func(fk: Array) -> bool: return float(fk[1]) > 0.0)
+	queue_redraw()
+
 func _finish() -> void:
 	if _done:
 		return
@@ -140,5 +208,12 @@ func _draw() -> void:
 	if rules == null:
 		return
 	var skin := Skins.ball()
-	draw_circle(Vector2.ZERO, rules.ball_radius, skin.color)
+	if skin.trail and _trail.size() > 1:
+		for i in range(_trail.size() - 1):
+			var f := float(i + 1) / float(_trail.size())
+			draw_line(to_local(_trail[i]), to_local(_trail[i + 1]),
+				Color(skin.trail_color, f * 0.8), rules.ball_radius * 1.6 * f, true)
+		for fleck: Array in _flecks:
+			draw_circle(to_local(fleck[0]), rules.ball_radius * 0.25, Color("#6dff8a", float(fleck[1]) / 0.4))
+	draw_circle(Vector2.ZERO, rules.ball_radius, REWIND_COLOR if _rewinding else skin.color)
 	draw_circle(Vector2(-rules.ball_radius * 0.3, -rules.ball_radius * 0.3), rules.ball_radius * 0.3, skin.highlight)

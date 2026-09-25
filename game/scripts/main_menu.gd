@@ -19,6 +19,7 @@ var _blocks: Array[Dictionary] = [] ## {pos: Vector2, size: float, rot: float, s
 var _t: float = 0.0
 
 var _root: Control
+var _layer: CanvasLayer
 var _settings_overlay: Control
 var _ui_scale_slider: HSlider
 var _shake_slider: HSlider
@@ -30,6 +31,10 @@ var _grid_thickness_slider: HSlider
 func _ready() -> void:
 	randomize()
 	_build_background_data()
+	# Drawn over the starfield (this node's _draw) and under the UI layer.
+	var constellation := NomaiConstellation.new()
+	add_child(constellation)
+	constellation.completed.connect(_on_constellation_completed)
 	_build_ui()
 
 func _build_background_data() -> void:
@@ -94,6 +99,7 @@ func _build_ui() -> void:
 	var vp := _viewport_size()
 	var layer := CanvasLayer.new()
 	add_child(layer)
+	_layer = layer
 
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -148,6 +154,55 @@ func _build_ui() -> void:
 	button_col.add_child(viewer_btn)
 
 	_build_settings_overlay(layer, vp)
+
+# ------------------------------------------------------ Outer Wilds unlock
+
+## The constellation's bloom is ~1.5 s; the banner lands as it peaks, and the
+## unlock is saved at the same moment so quitting early still keeps it.
+func _on_constellation_completed() -> void:
+	await get_tree().create_timer(NomaiConstellation.BLOOM_SECONDS * 0.5).timeout
+	Unlocks.unlock(Unlocks.OUTER_WILDS)
+	_show_unlock_banner()
+
+func _show_unlock_banner() -> void:
+	var vp := _viewport_size()
+	var overlay := Control.new()
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_layer.add_child(overlay)
+
+	var dim := ColorRect.new()
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0, 0, 0, 0.55)
+	overlay.add_child(dim)
+
+	var panel := PanelContainer.new()
+	var style := ArcadeUI.style(false)
+	style.border_color = NomaiConstellation.LINE_COLOR
+	style.set_content_margin_all(36.0)
+	panel.add_theme_stylebox_override("panel", style)
+	panel.custom_minimum_size = Vector2(820.0, 0.0)
+	panel.position = Vector2((vp.x - 820.0) * 0.5, vp.y * 0.3)
+	overlay.add_child(panel)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 16)
+	panel.add_child(col)
+	var title := ArcadeUI.label("OUTER WILDS EXTRAS UNLOCKED", 44, NomaiConstellation.LINE_COLOR)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+	for line in [
+		"Mod: Wormholes (Wall)",
+		"Mod: Time Rewind (Ball collision)",
+		"Ball skin: Interloper",
+		"Launcher skin: Orbital Probe Cannon",
+		"Background: End Times",
+	]:
+		col.add_child(ArcadeUI.label("✦ " + line, 28))
+	var ok_btn := ArcadeUI.button("OK")
+	ok_btn.pressed.connect(overlay.queue_free)
+	col.add_child(ok_btn)
+
 
 # ------------------------------------------------------------ settings overlay
 

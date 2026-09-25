@@ -4,7 +4,7 @@ class_name PauseMenu
 ## root page, each of the latter three opening its own page. Built in code
 ## rather than laid out in a .tscn -- see docs/HANDOFF.md §7 on why
 ## hand-written scene UI is the riskiest part of this project, and
-## Game._build_walls for the existing precedent.
+## Playfield.build_walls for the existing precedent.
 ##
 ## `process_mode = ALWAYS` (set in _ready) so this keeps taking input while
 ## `get_tree().paused` is true -- that IS the pause menu's job.
@@ -240,22 +240,22 @@ func _build_skins_page() -> VBoxContainer:
 	col.add_child(_header("SKINS"))
 	col.add_child(_label("Test swatches, not persisted -- session only. Click one to select it.", LABEL_FONT_SIZE))
 
-	var ball_names: Array = Skins.ball_skins.map(func(s: Skins.BallSkin) -> String: return s.skin_name)
+	var ball_names: Array = Skins.picker_names(Skins.ball_skins)
 	col.add_child(_skin_category(_ball_preview(), "Ball", ball_names,
 		func() -> int: return Skins.ball_index,
 		func(i: int) -> void: Skins.set_ball(i)))
 
-	var bg_names: Array = Skins.background_skins.map(func(s: Skins.BackgroundSkin) -> String: return s.skin_name)
+	var bg_names: Array = Skins.picker_names(Skins.background_skins)
 	col.add_child(_skin_category(_background_preview(), "Background", bg_names,
 		func() -> int: return Skins.background_index,
 		func(i: int) -> void: Skins.set_background(i)))
 
-	var block_names: Array = Skins.block_skins.map(func(s: Skins.BlockSkin) -> String: return s.skin_name)
+	var block_names: Array = Skins.picker_names(Skins.block_skins)
 	col.add_child(_skin_category(_block_preview(), "Block", block_names,
 		func() -> int: return Skins.block_index,
 		func(i: int) -> void: Skins.set_block(i)))
 
-	var launcher_names: Array = Skins.launcher_skins.map(func(s: Skins.LauncherSkin) -> String: return s.skin_name)
+	var launcher_names: Array = Skins.picker_names(Skins.launcher_skins)
 	col.add_child(_skin_category(_launcher_preview(), "Launcher", launcher_names,
 		func() -> int: return Skins.launcher_index,
 		func(i: int) -> void: Skins.set_launcher(i)))
@@ -281,6 +281,21 @@ func _build_debug_page() -> VBoxContainer:
 	_invincible_toggle = _toggle_button("Invincible (auto-clear a lethal row)")
 	_invincible_toggle.toggled.connect(func(pressed: bool) -> void: Debug.invincible = pressed)
 	col.add_child(_invincible_toggle)
+
+	# Unlocks are persisted progress (the Unlocks autoload), so these write
+	# user://unlocks.cfg. Pickers already built this session refresh on the
+	# next scene load.
+	var unlock_row := HBoxContainer.new()
+	unlock_row.add_theme_constant_override("separation", 16)
+	var unlock_btn := _button("Unlock all")
+	unlock_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	unlock_btn.pressed.connect(Unlocks.unlock_all)
+	unlock_row.add_child(unlock_btn)
+	var relock_btn := _button("Re-lock all")
+	relock_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	relock_btn.pressed.connect(Unlocks.relock_all)
+	unlock_row.add_child(relock_btn)
+	col.add_child(unlock_row)
 
 	col.add_child(_label("Change game mods", SUBHEADER_FONT_SIZE))
 	var mods_btn := _button("Mods...")
@@ -476,13 +491,22 @@ func _skin_category(preview: Control, title: String, names: Array, get_index: Ca
 		var btn := _chip_button(str(names[i]))
 		btn.button_group = group
 		btn.button_pressed = i == get_index.call()
+		if str(names[i]) == Skins.LOCKED_NAME:
+			btn.disabled = true
+			btn.tooltip_text = Skins.LOCKED_HINT
 		btn.pressed.connect(func() -> void: on_select.call(i))
 		chips.add_child(btn)
 		buttons.append(btn)
-	Skins.changed.connect(func() -> void:
+	# A lambda on an autoload signal is NOT auto-disconnected when the
+	# buttons it captured are freed (a method connection would be), so it
+	# would fire into freed buttons after the next scene change. Disconnect
+	# it when this row leaves the tree.
+	var sync := func() -> void:
 		var idx: int = get_index.call()
 		for i in range(buttons.size()):
-			buttons[i].button_pressed = i == idx)
+			buttons[i].button_pressed = i == idx
+	Skins.changed.connect(sync)
+	wrap.tree_exiting.connect(func() -> void: Skins.changed.disconnect(sync))
 	wrap.add_child(chips)
 	return wrap
 
@@ -546,7 +570,9 @@ func _launcher_preview() -> Control:
 	c.draw.connect(func() -> void:
 		var accent := Skins.ball().color
 		var center := size * 0.5
-		if Skins.launcher().shape == Skins.LauncherShape.CANNON:
+		if Skins.launcher().shape == Skins.LauncherShape.PROBE_CANNON:
+			Shooter.draw_probe_cannon(c, Vector2(center.x, size.y - 14.0), Vector2.UP, 0.55)
+		elif Skins.launcher().shape == Skins.LauncherShape.CANNON:
 			c.draw_rect(Rect2(Vector2(center.x - 9.0, 6.0), Vector2(18.0, size.y - 26.0)), Color("#4b5563"), true)
 			c.draw_circle(Vector2(center.x, size.y - 16.0), 18.0, Color("#242830"))
 			c.draw_circle(Vector2(center.x, 10.0), 8.0, accent)

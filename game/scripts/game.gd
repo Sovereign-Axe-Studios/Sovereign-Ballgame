@@ -52,22 +52,46 @@ var _dragging: bool = false
 var _debug_touches: Dictionary = {} ## touch index -> screen position, for the two-finger-tap destroy gesture.
 var _landed_balls: Array[Ball] = [] ## Stick modes only -- finished but not yet freed, gathered in _end_round.
 var _line_up_count: int = 0 ## reset each round; LINE_UP mode's next-slot counter.
+var _rules_installed: bool = false
+## What field hooks (GameMod.on_run_start / on_round_end) are handed.
+var field := Playfield.new()
+## +1 pickups still dropping. Credited at round end even if they haven't
+## landed yet -- see _end_round.
+var _falling_balls: Array[FallingBall] = []
+var _animated_bg: EndTimesBackground
+## Seconds since this round's first shot (rules.on_firing_tick).
+var _firing_time: float = 0.0
 
 
-func _ready() -> void:
-	randomize()
+## Rules exist from _enter_tree, not _ready: children (DebugOverlay,
+## PauseMenu) run their _ready BEFORE this node's, and some read `rules`.
+func _enter_tree() -> void:
+	if _rules_installed:
+		return
+	_rules_installed = true
 	if rules == null:
 		rules = GameRules.new()
 	# Before layout: GRID mods change the board size.
 	rules.install(Run.make_mods())
 
+func _ready() -> void:
+	randomize()
+
 	grid.pickup_collected.connect(_on_pickup_collected)
 	grid.block_destroyed.connect(_on_block_destroyed)
 	pause_menu.grid_apply_requested.connect(_on_debug_grid_apply)
 	Skins.changed.connect(queue_redraw)
+	Skins.changed.connect(_sync_animated_background)
+	_sync_animated_background()
 
 	_layout_playfield()
 	_prime_board()
+	field.rules = rules
+	field.grid = grid
+	field.effects_root = effects_root
+	rules.on_run_start(field)
+	if Debug.enabled:
+		debug_overlay.refresh_row_buttons()
 	_refresh_hud()
 	queue_redraw()
 
@@ -81,6 +105,8 @@ func _layout_playfield() -> void:
 	)
 	_play_left = rules.side_margin
 	_play_right = vp.x - rules.side_margin
+	rules.play_left = _play_left
+	rules.play_right = _play_right
 
 	# Square cells. Width usually decides, but clamp so a taller grid (a mod
 	# changing grid_height) still leaves the shooter room to work.
@@ -93,7 +119,7 @@ func _layout_playfield() -> void:
 	var org := Vector2((vp.x - grid_w) * 0.5, rules.grid_top)
 	grid.configure(rules, cell, org)
 
-	_build_walls(vp)
+	Playfield.build_walls(walls_root, rules, vp.x)
 
 	shooter.setup(rules)
 	shooter.position = Vector2(vp.x * 0.5, rules.floor_y - rules.shooter_height)
@@ -106,35 +132,6 @@ func _layout_playfield() -> void:
 func _prime_board() -> void:
 	grid.spawn_row(round_number)
 	grid.advance()
-
-
-## Solid rectangles rather than WorldBoundaryShape2D: a fast ball that clips a
-## boundary line can end up on the wrong side of it, a thick box it cannot.
-func _build_walls(vp: Vector2) -> void:
-	for child in walls_root.get_children():
-		child.queue_free()
-
-	var body := StaticBody2D.new()
-	body.collision_layer = 1
-	body.collision_mask = 0
-	body.add_to_group("wall")
-	walls_root.add_child(body)
-
-	var span := rules.floor_y - rules.grid_top
-	var mid_y := (rules.grid_top + rules.floor_y) * 0.5
-	var thickness := 400.0
-
-	_add_wall(body, Vector2(thickness, span + thickness * 2.0), Vector2(_play_left - thickness * 0.5, mid_y))
-	_add_wall(body, Vector2(thickness, span + thickness * 2.0), Vector2(_play_right + thickness * 0.5, mid_y))
-	_add_wall(body, Vector2(vp.x + thickness * 2.0, thickness), Vector2(vp.x * 0.5, rules.grid_top - thickness * 0.5))
-
-func _add_wall(body: StaticBody2D, size: Vector2, pos: Vector2) -> void:
-	var shape := CollisionShape2D.new()
-	var rect := RectangleShape2D.new()
-	rect.size = size
-	shape.shape = rect
-	shape.position = pos
-	body.add_child(shape)
 
 
 # --------------------------------------------------------------------- input
@@ -158,6 +155,8 @@ func _process(delta: float) -> void:
 			if Input.is_action_just_pressed("fire"):
 				_begin_firing()
 		State.FIRING:
+			_firing_time += delta
+			rules.on_firing_tick(self, _firing_time)
 			_tick_firing(delta)
 
 ## Press-and-drag aiming. The full drag/line treatment is a later build step;
@@ -198,6 +197,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _begin_firing() -> void:
 	state = State.FIRING
+	_firing_time = 0.0
 	_to_fire = rules.shots_for_round(ball_count)
 	_fire_cd = 0.0
 	_live_balls = 0
@@ -221,14 +221,38 @@ func _tick_firing(delta: float) -> void:
 		_to_fire -= 1
 		_fire_cd += interval
 
+## An `animated` background skin (End Times) is a node drawn behind this
+## one, not a flat fill in _draw. Add or remove it to match the skin.
+func _sync_animated_background() -> void:
+	var want := Skins.background().animated
+	if want and not is_instance_valid(_animated_bg):
+		_animated_bg = EndTimesBackground.new()
+		add_child(_animated_bg)
+		move_child(_animated_bg, 0)
+	elif not want and is_instance_valid(_animated_bg):
+		_animated_bg.queue_free()
+		_animated_bg = null
+
+## Cancel this round's unfired shots (Time Rewind). The round still ends the
+## normal way, once every ball already out has finished.
+func stop_firing() -> void:
+	_to_fire = 0
+	if _live_balls <= 0 and state == State.FIRING:
+		_end_round()
+
+## Balls still in play this round.
+func live_balls() -> Array[Ball]:
+	var out: Array[Ball] = []
+	for node in balls_root.get_children():
+		if node is Ball and not (node as Ball).is_done():
+			out.append(node)
+	return out
+
 func _spawn_ball() -> void:
 	var ball: Ball = BallScene.instantiate()
 	balls_root.add_child(ball)
-	var aim_direction := shooter.aim_direction()
-	if rules.random_rotate_value_deg != 0.0:
-		var spread := deg_to_rad(rules.random_rotate_value_deg)
-		aim_direction = aim_direction.rotated(randf_range(-spread, spread))
-	ball.launch(rules, _fire_origin, aim_direction)
+	ball.launch(rules, _fire_origin, rules.spread_direction(shooter.aim_direction()))
+	shooter.flash()
 	ball.finished.connect(_on_ball_finished)
 	ball.block_damaged.connect(_on_block_damaged)
 	_live_balls += 1
@@ -293,8 +317,14 @@ func _on_pickup_collected(pickup: BallPickup) -> void:
 	falling.global_position = pickup.global_position
 	falling.setup(rules.ball_radius, rules.floor_y)
 	falling.landed.connect(_on_powerup_ball_landed)
+	_falling_balls.append(falling)
 
-func _on_powerup_ball_landed(_ball: FallingBall) -> void:
+## Only ticks pending_balls if _end_round hasn't already credited this ball
+## (it does when the round's balls all land before the pickup does).
+func _on_powerup_ball_landed(ball: FallingBall) -> void:
+	_falling_balls.erase(ball)
+	if ball.credited:
+		return
 	pending_balls += 1
 	_refresh_hud()
 
@@ -324,6 +354,13 @@ func _end_round() -> void:
 					ball.return_to(target, randf_range(BALL_RETURN_MIN_DURATION, BALL_RETURN_MAX_DURATION))
 	_landed_balls.clear()
 
+	# A pickup collected this round counts this round, even if its dropped
+	# ball is still falling -- otherwise it would bank into the NEXT round's
+	# pending and the player waits an extra round for it.
+	for falling in _falling_balls:
+		if not falling.credited:
+			falling.credited = true
+			pending_balls += 1
 	ball_count += pending_balls
 	expected_ball_count += pending_balls
 	expected_round_number += 1
@@ -348,6 +385,7 @@ func _end_round() -> void:
 			_game_over()
 			return
 		round_number += 1
+	rules.on_round_end(field)
 
 	shooter.active = true
 	shooter.queue_redraw()
@@ -387,6 +425,7 @@ func _on_debug_grid_apply(width: int, height: int, kill_row: int, spawn_row: int
 	debug_row_credit = 0
 	_layout_playfield()
 	_prime_board()
+	rules.on_run_start(field)
 	debug_overlay.refresh_row_buttons()
 	_refresh_hud()
 
@@ -527,7 +566,8 @@ func _draw() -> void:
 		return
 	var vp_w := float(ProjectSettings.get_setting("display/window/size/viewport_width"))
 	var vp_h := float(ProjectSettings.get_setting("display/window/size/viewport_height"))
-	draw_rect(Rect2(Vector2.ZERO, Vector2(vp_w, vp_h)), Skins.background().color, true)
+	if not Skins.background().animated:
+		draw_rect(Rect2(Vector2.ZERO, Vector2(vp_w, vp_h)), Skins.background().color, true)
 
 	# Walls and ceiling.
 	var t := 8.0

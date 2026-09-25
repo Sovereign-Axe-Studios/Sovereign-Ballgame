@@ -29,9 +29,30 @@ var display_name: String = "None"
 var description: String = ""
 ## False = listed in the Custom screen but greyed out (not built yet).
 var available: bool = true
+## Unlock id (see the Unlocks autoload) that must be earned before this mod
+## can be picked. Empty = always unlocked.
+var locked_by: StringName = &""
+## False = the ? panel loops draw_preview full-size instead of running a live
+## mini-board (for mods a 4x5 board can't show, like Lives or a grid size).
+var live_preview: bool = true
 
 static func category_name(c: Category) -> String:
 	return CATEGORY_NAMES[c]
+
+## Available, and unlocked if it needs to be.
+func is_selectable() -> bool:
+	return available and (locked_by == &"" or Unlocks.is_unlocked(locked_by))
+
+
+# ----------------------------------------------------------------- preview
+
+## Draw a looping sketch of this mod into `rect` on `canvas` at `t` seconds.
+## t = 0 is the static tile icon; hover advances t. Use PreviewDraw so every
+## icon shares one look. Default: the category's initial on a blank board.
+func draw_preview(canvas: CanvasItem, rect: Rect2, _t: float) -> void:
+	PreviewDraw.board(canvas, rect)
+	PreviewDraw.text(canvas, rect.get_center(), category_name(category).left(1),
+		int(rect.size.y * 0.4), PreviewDraw.FRAME)
 
 
 # ------------------------------------------------------------- every mod
@@ -43,6 +64,17 @@ func apply(_rules: GameRules) -> void:
 ## A HUD line for this mod ("LIVES 2"). Empty = nothing shown.
 func status_text(_rules: GameRules) -> String:
 	return ""
+
+## The board exists (after the first layout, and again after a Debug Menu
+## grid apply). Mods that put things on the field add nodes under
+## `field.effects_root` here. Called for every installed mod.
+func on_run_start(_rules: GameRules, _field: Playfield) -> void:
+	pass
+
+## A round just resolved: the field has shifted down and the next row is in.
+## Called for every installed mod.
+func on_round_end(_rules: GameRules, _field: Playfield) -> void:
+	pass
 
 
 # ----------------------------------------------------------------- DENSITY
@@ -62,12 +94,25 @@ func open_slots(rules: GameRules) -> int:
 func shots_for_round(rules: GameRules, ball_count: int) -> int:
 	return rules.default_shots_for_round(ball_count)
 
+## True = every ball records its path (one point per physics frame) so the
+## mod can play it back (Time Rewind). Off by default: normal runs pay nothing.
+func wants_path_recording(_rules: GameRules) -> bool:
+	return false
+
+## Each frame while FIRING, with seconds since the round's first shot.
+func on_firing_tick(_rules: GameRules, _game: Game, _seconds: float) -> void:
+	pass
+
 ## Damage `ball` deals on this block contact.
 func damage_for(rules: GameRules, _ball: Ball) -> int:
 	return rules.ball_damage
 
 
 # -------------------------------------------------------------------- WALL
+
+## `ball` finished moving for this physics frame (after any bounces).
+func on_ball_moved(_rules: GameRules, _ball: Ball) -> void:
+	pass
 
 ## `ball` just touched a wall. Return true if the mod handled it -- the ball
 ## then skips its normal bounce for this contact.

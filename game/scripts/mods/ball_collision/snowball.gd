@@ -17,3 +17,15 @@ func shots_for_round(_rules: GameRules, ball_count: int) -> int:
 
 func damage_for(rules: GameRules, ball: Ball) -> int:
 	return rules.ball_damage + ball.bounces * DAMAGE_PER_BOUNCE
+
+## A ball swelling with every bounce, its damage counting up.
+func draw_preview(c: CanvasItem, r: Rect2, t: float) -> void:
+	PreviewDraw.board(c, r)
+	var n := 1 + int(PreviewDraw.phase(t, 3.0) * 6.0)
+	var center := PreviewDraw.at(r, 0.5, 0.58)
+	var radius := PreviewDraw.px(r, 0.06 + n * 0.018)
+	for k in range(n - 1):
+		c.draw_arc(center, radius + PreviewDraw.px(r, 0.05 + k * 0.035), -0.7, 0.7, 12, PreviewDraw.FRAME, 2.0)
+	PreviewDraw.ball(c, center, radius)
+	PreviewDraw.text(c, center - Vector2(0, radius + PreviewDraw.px(r, 0.1)), "+%d" % n,
+		int(PreviewDraw.px(r, 0.16)), PreviewDraw.GLOW)
