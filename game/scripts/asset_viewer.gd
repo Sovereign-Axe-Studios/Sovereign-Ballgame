@@ -1,176 +1,92 @@
 class_name AssetViewer
 extends Node2D
-## Browses what the project actually has right now, in tabs: Skins (ball /
-## background / block / launcher, same chip-picker as the pause menu's Skins
-## page), Modes (ball-return behaviour + a Game Mods stub -- there are no
-## mods yet), Audio (SFX/Music bus volume -- no sound assets exist yet
-## either, so this is buses and sliders, not a sound library).
+## Browses what the project actually has right now, in tabs: Skins (a live
+## SkinPreview -- ball rolling, background running, its reactions on buttons
+## -- above the shared SkinsPanel), Modes (ball-return behaviour, and every registered
+## game mod), Audio (SFX/Music volume plus the sound library exported from the
+## Ballgame Sound Lab: audition everything and pick what the game plays; see AudioLib).
 ##
 ## Deliberately NOT padded out to match a richer reference screen from
-## another Sovereign Axe title -- every tab here reflects what this project
-## actually contains today rather than placeholder rows for content that
-## doesn't exist.
+## another Sovereign Axe title -- every tab reflects what this project
+## actually contains today.
 
 const MAIN_MENU_SCENE := "res://scenes/main_menu.tscn"
+const MARGIN := 40.0
 
 var _return_mode_option: OptionButton
 
 func _ready() -> void:
+	# Quiet the menu music so auditions are heard on their own; the main menu restarts it.
+	AudioLib.stop_music(0.3)
+	add_child(GeometricBackdrop.new())
 	_build_ui()
 
+func _exit_tree() -> void:
+	AudioLib.stop_preview()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("pause"):
+		get_tree().change_scene_to_file(MAIN_MENU_SCENE)
+		get_viewport().set_input_as_handled()
+
 func _build_ui() -> void:
-	var vp := Vector2(
-		float(ProjectSettings.get_setting("display/window/size/viewport_width")),
-		float(ProjectSettings.get_setting("display/window/size/viewport_height"))
-	)
+	var vp := NeonUI.view_size()
 	var layer := CanvasLayer.new()
 	add_child(layer)
-
-	var bg := ColorRect.new()
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg.color = Skins.background().color.darkened(0.1)
-	layer.add_child(bg)
-
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(root)
 
-	var header := Label.new()
-	header.text = "ASSET VIEWER"
-	header.position = Vector2(40.0, 30.0)
-	header.size = Vector2(vp.x - 80.0, 70.0)
-	header.add_theme_font_size_override("font_size", 44)
-	header.add_theme_color_override("font_color", Skins.ball().color)
+	var header := NeonUI.header("Asset viewer")
+	header.position = Vector2(MARGIN, 40.0)
+	header.size = Vector2(vp.x - MARGIN * 2.0 - 220.0, 80.0)
 	root.add_child(header)
 
-	var back_btn := Button.new()
-	back_btn.text = "← BACK"
-	back_btn.position = Vector2(40.0, 110.0)
-	back_btn.custom_minimum_size = Vector2(160.0, 60.0)
-	back_btn.add_theme_font_size_override("font_size", 24)
+	var back_btn := NeonUI.button("BACK")
+	back_btn.position = Vector2(vp.x - MARGIN - 200.0, 40.0)
+	back_btn.size = Vector2(200.0, NeonUI.BUTTON_HEIGHT)
 	back_btn.pressed.connect(func() -> void: get_tree().change_scene_to_file(MAIN_MENU_SCENE))
 	root.add_child(back_btn)
 
 	var tabs := TabContainer.new()
-	tabs.position = Vector2(40.0, 190.0)
-	tabs.size = Vector2(vp.x - 80.0, vp.y - 240.0)
-	tabs.add_theme_font_size_override("font_size", 26)
+	tabs.position = Vector2(MARGIN, 170.0)
+	tabs.size = Vector2(vp.x - MARGIN * 2.0, vp.y - 210.0)
+	_style_tabs(tabs)
 	root.add_child(tabs)
 
-	tabs.add_child(_build_skins_tab())
-	tabs.add_child(_build_modes_tab())
-	tabs.add_child(_build_audio_tab())
+	tabs.add_child(_tab("Skins", func(col: VBoxContainer) -> void:
+		col.add_child(SkinPreview.new())
+		col.add_child(SkinsPanel.new())))
+	tabs.add_child(_tab("Modes", _build_modes_tab))
+	tabs.add_child(_tab("Audio", _build_audio_tab))
 
+func _style_tabs(tabs: TabContainer) -> void:
+	tabs.add_theme_font_size_override("font_size", 30)
+	tabs.add_theme_stylebox_override("panel", NeonUI.panel_style())
+	var off := NeonUI.box(false, NeonUI.CYAN, 0.0)
+	var on := NeonUI.box(true, NeonUI.CYAN, 0.0)
+	tabs.add_theme_stylebox_override("tab_unselected", off)
+	tabs.add_theme_stylebox_override("tab_hovered", on)
+	tabs.add_theme_stylebox_override("tab_selected", on)
+	tabs.add_theme_color_override("font_selected_color", NeonUI.TEXT)
+	tabs.add_theme_color_override("font_unselected_color", NeonUI.TEXT_SOFT)
+	tabs.add_theme_color_override("font_hovered_color", NeonUI.TEXT)
 
-# --------------------------------------------------------------- skins tab
-
-func _build_skins_tab() -> Control:
-	var scroll := ScrollContainer.new()
-	scroll.name = "Skins"
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-
-	var margin := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_%s" % side, 30)
-	scroll.add_child(margin)
-
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 24)
-	margin.add_child(col)
-
-	var ball_names: Array = Skins.picker_names(Skins.ball_skins)
-	col.add_child(_skin_category(_ball_preview(), "Ball", ball_names,
-		func() -> int: return Skins.ball_index,
-		func(i: int) -> void: Skins.set_ball(i)))
-
-	var bg_names: Array = Skins.picker_names(Skins.background_skins)
-	col.add_child(_skin_category(_background_preview(), "Background", bg_names,
-		func() -> int: return Skins.background_index,
-		func(i: int) -> void: Skins.set_background(i)))
-
-	var block_names: Array = Skins.picker_names(Skins.block_skins)
-	col.add_child(_skin_category(_block_preview(), "Block", block_names,
-		func() -> int: return Skins.block_index,
-		func(i: int) -> void: Skins.set_block(i)))
-
-	var launcher_names: Array = Skins.picker_names(Skins.launcher_skins)
-	col.add_child(_skin_category(_launcher_preview(), "Launcher", launcher_names,
-		func() -> int: return Skins.launcher_index,
-		func(i: int) -> void: Skins.set_launcher(i)))
-
+## A named NeonUI page whose column `build` fills.
+func _tab(title: String, build: Callable) -> Control:
+	var parts := NeonUI.page(0.0, 0)
+	var scroll: ScrollContainer = parts[0]
+	scroll.name = title
+	build.call(parts[1])
 	return scroll
-
-func _skin_category(preview: Control, title: String, names: Array, get_index: Callable, on_select: Callable) -> VBoxContainer:
-	var wrap := VBoxContainer.new()
-	wrap.add_theme_constant_override("separation", 10)
-
-	var header_row := HBoxContainer.new()
-	header_row.add_theme_constant_override("separation", 16)
-	header_row.add_child(preview)
-	var title_label := Label.new()
-	title_label.text = title
-	title_label.add_theme_font_size_override("font_size", 28)
-	title_label.add_theme_color_override("font_color", Palette.TEXT)
-	header_row.add_child(title_label)
-	wrap.add_child(header_row)
-
-	var group := ButtonGroup.new()
-	var chips := HFlowContainer.new()
-	chips.add_theme_constant_override("h_separation", 10)
-	chips.add_theme_constant_override("v_separation", 10)
-	var buttons: Array[Button] = []
-	for i in range(names.size()):
-		var btn := _chip_button(str(names[i]))
-		btn.button_group = group
-		btn.button_pressed = i == get_index.call()
-		if str(names[i]) == Skins.LOCKED_NAME:
-			btn.disabled = true
-			btn.tooltip_text = Skins.LOCKED_HINT
-		btn.pressed.connect(func() -> void: on_select.call(i))
-		chips.add_child(btn)
-		buttons.append(btn)
-	# A lambda on an autoload signal is NOT auto-disconnected when the
-	# buttons it captured are freed (a method connection would be), so it
-	# would fire into freed buttons after the next scene change. Disconnect
-	# it when this row leaves the tree.
-	var sync := func() -> void:
-		var idx: int = get_index.call()
-		for i in range(buttons.size()):
-			buttons[i].button_pressed = i == idx
-	Skins.changed.connect(sync)
-	wrap.tree_exiting.connect(func() -> void: Skins.changed.disconnect(sync))
-	wrap.add_child(chips)
-	return wrap
-
-func _chip_button(text: String) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.toggle_mode = true
-	b.custom_minimum_size = Vector2(0.0, 56.0)
-	b.add_theme_font_size_override("font_size", 22)
-	return b
 
 
 # --------------------------------------------------------------- modes tab
 
-func _build_modes_tab() -> Control:
-	var scroll := ScrollContainer.new()
-	scroll.name = "Modes"
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-
-	var margin := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_%s" % side, 30)
-	scroll.add_child(margin)
-
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 20)
-	margin.add_child(col)
-
-	col.add_child(_section_label("Ball return behaviour"))
-	_return_mode_option = OptionButton.new()
-	_return_mode_option.custom_minimum_size = Vector2(0.0, 64.0)
-	_return_mode_option.add_theme_font_size_override("font_size", 24)
+func _build_modes_tab(col: VBoxContainer) -> void:
+	col.add_child(NeonUI.subheader("Ball return behaviour"))
+	_return_mode_option = NeonUI.option_button()
 	for mode in range(Skins.ReturnMode.size()):
 		_return_mode_option.add_item(Skins.RETURN_MODE_NAMES[mode], mode)
 	_return_mode_option.select(Skins.return_mode)
@@ -178,119 +94,150 @@ func _build_modes_tab() -> Control:
 		Skins.set_return_mode(_return_mode_option.get_item_id(index) as Skins.ReturnMode))
 	col.add_child(_return_mode_option)
 
-	col.add_child(_section_label("Game mods"))
-	var mods_note := Label.new()
-	mods_note.text = "None built yet -- this is a stub. See docs/HANDOFF.md §5, the mod layer's design section."
-	mods_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	mods_note.add_theme_font_size_override("font_size", 22)
-	mods_note.add_theme_color_override("font_color", Palette.TEXT_DIM)
-	col.add_child(mods_note)
-
-	return scroll
-
-func _section_label(text: String) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", 28)
-	l.add_theme_color_override("font_color", Palette.TEXT)
-	return l
+	col.add_child(NeonUI.subheader("Game mods"))
+	for script: GDScript in Cfg.MODS:
+		var mod := script.new() as GameMod
+		var locked := not Unlocks.is_unlocked(mod.locked_by)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 18)
+		var icon := ModPreviewIcon.new(mod, locked)
+		icon.custom_minimum_size = Vector2(96.0, 96.0)
+		row.add_child(icon)
+		var text := VBoxContainer.new()
+		text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var title := "???" if locked else mod.display_name
+		text.add_child(NeonUI.label("%s  ·  %s" % [title, GameMod.category_name(mod.category)], 26, NeonUI.TEXT))
+		text.add_child(NeonUI.label(Skins.LOCKED_HINT if locked else mod.description, 20, NeonUI.TEXT_DIM))
+		row.add_child(text)
+		if not locked:
+			row.mouse_entered.connect(func() -> void: icon.playing = true)
+			row.mouse_exited.connect(func() -> void: icon.playing = false)
+			row.mouse_filter = Control.MOUSE_FILTER_PASS
+		col.add_child(row)
 
 
 # --------------------------------------------------------------- audio tab
 
-func _build_audio_tab() -> Control:
-	var scroll := ScrollContainer.new()
-	scroll.name = "Audio"
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-
-	var margin := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_%s" % side, 30)
-	scroll.add_child(margin)
-
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 20)
-	margin.add_child(col)
-
-	var note := Label.new()
-	note.text = "No sound assets exist yet -- these are real audio buses (audio/bus_layout.tres) and their volume sliders, with nothing routed through them to hear yet."
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	note.add_theme_font_size_override("font_size", 22)
-	note.add_theme_color_override("font_color", Palette.TEXT_DIM)
-	col.add_child(note)
-
-	var sfx := _slider_row(col, "SFX volume", 0.0, 100.0)
+func _build_audio_tab(col: VBoxContainer) -> void:
+	var sfx := NeonUI.slider_row(col, "SFX volume", 0.0, 100.0)
 	sfx.value = Settings.sfx_volume * 100.0
 	sfx.value_changed.connect(func(v: float) -> void: Settings.set_sfx_volume(v / 100.0))
-
-	var music := _slider_row(col, "Music volume", 0.0, 100.0)
+	var music := NeonUI.slider_row(col, "Music volume", 0.0, 100.0)
 	music.value = Settings.music_volume * 100.0
 	music.value_changed.connect(func(v: float) -> void: Settings.set_music_volume(v / 100.0))
 
-	return scroll
+	if not AudioLib.has_library():
+		col.add_child(NeonUI.label("No sound library found. Export one from the Ballgame Sound Lab (Export game library), unzip it so the library folder ends up in game/audio/, let Godot import it, then reopen this screen.", 22, NeonUI.TEXT_DIM))
+		return
+	_build_audio_picks(col)
+	_build_audio_browser(col)
 
-func _slider_row(col: VBoxContainer, caption: String, lo: float, hi: float) -> HSlider:
-	col.add_child(_section_label(caption))
-	var s := HSlider.new()
-	s.min_value = lo
-	s.max_value = hi
-	s.step = 1.0
-	s.custom_minimum_size = Vector2(0.0, 40.0)
-	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.add_child(s)
-	return s
+## One row per place the game plays a sound, each with a dropdown of the
+## versions that fit it. Changing a dropdown saves the pick and auditions it.
+func _build_audio_picks(col: VBoxContainer) -> void:
+	col.add_child(NeonUI.subheader("Your picks for this session"))
+	col.add_child(NeonUI.label("What the game plays. Saved between runs. Picking one plays it once so you can hear it.", 22, NeonUI.TEXT_DIM))
 
+	# Game music comes in five tiers, one per ten rounds; auditions use this one.
+	var tier_opt := NeonUI.option_button()
+	for t in range(1, AudioLib.MAX_TIER + 1):
+		tier_opt.add_item("Tier %d" % t)
+	tier_opt.select(AudioLib.preview_tier - 1)
+	tier_opt.item_selected.connect(func(idx: int) -> void: AudioLib.preview_tier = idx + 1)
+	tier_opt.set_meta("no_ui_sound", true)
+	col.add_child(NeonUI.captioned(tier_opt, "Game music audition tier"))
 
-# ------------------------------------------------------------- skin previews
+	var options := {} # hook key -> OptionButton, so Reset can re-point them
+	for h in AudioLib.HOOKS:
+		var key: String = h["key"]
+		var list: Array = AudioLib.entries_for(key)
+		if list.is_empty():
+			continue
+		var opt := NeonUI.option_button()
+		opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		opt.set_meta("no_ui_sound", true)
+		var current: String = AudioLib.pick_entry(key).get("id", "")
+		for i in range(list.size()):
+			opt.add_item(_entry_label(list[i], h["kind"] == "music"))
+			opt.set_item_metadata(i, list[i]["id"])
+			if list[i]["id"] == current:
+				opt.select(i)
+		opt.item_selected.connect(func(idx: int) -> void:
+			var id: String = opt.get_item_metadata(idx)
+			AudioLib.set_pick(key, id)
+			AudioLib.preview(id))
+		options[key] = opt
 
-func _ball_preview() -> Control:
-	var size := Vector2(64.0, 64.0)
-	var c := Control.new()
-	c.custom_minimum_size = size
-	c.draw.connect(func() -> void:
-		var skin := Skins.ball()
-		var center := size * 0.5
-		c.draw_circle(center, size.x * 0.42, skin.color)
-		c.draw_circle(center + Vector2(-size.x * 0.14, -size.x * 0.14), size.x * 0.13, skin.highlight))
-	Skins.changed.connect(c.queue_redraw)
-	return c
+		var play := _audition_button("▶")
+		play.custom_minimum_size.x = 90.0
+		play.pressed.connect(func() -> void:
+			_toggle_preview(opt.get_item_metadata(opt.selected)))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 12)
+		row.add_child(opt)
+		row.add_child(play)
+		col.add_child(NeonUI.captioned(row, h["label"]))
 
-func _background_preview() -> Control:
-	var size := Vector2(64.0, 64.0)
-	var c := Control.new()
-	c.custom_minimum_size = size
-	c.draw.connect(func() -> void:
-		c.draw_rect(Rect2(Vector2.ZERO, size), Skins.background().color, true)
-		c.draw_rect(Rect2(Vector2.ZERO, size), Color(1, 1, 1, 0.2), false, 2.0))
-	Skins.changed.connect(c.queue_redraw)
-	return c
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 12)
+	col.add_child(actions)
+	var stop := _audition_button("■ Stop")
+	stop.pressed.connect(AudioLib.stop_preview)
+	actions.add_child(stop)
+	var reset := _audition_button("Reset picks to defaults")
+	reset.pressed.connect(func() -> void:
+		AudioLib.stop_preview()
+		AudioLib.reset_picks()
+		for key: String in options:
+			var opt: OptionButton = options[key]
+			var id: String = AudioLib.pick_entry(key).get("id", "")
+			for i in range(opt.item_count):
+				if opt.get_item_metadata(i) == id:
+					opt.select(i))
+	actions.add_child(reset)
 
-func _block_preview() -> Control:
-	var size := Vector2(64.0, 64.0)
-	var c := Control.new()
-	c.custom_minimum_size = size
-	c.draw.connect(func() -> void:
-		var ramp: Array[Color] = Skins.block().ramp
-		var w := size.x / float(ramp.size())
-		for i in range(ramp.size()):
-			c.draw_rect(Rect2(Vector2(float(i) * w, 0.0), Vector2(w + 1.0, size.y)), ramp[i], true))
-	Skins.changed.connect(c.queue_redraw)
-	return c
+## Every sound in the library, grouped, for listening. Sounds the game does
+## not use yet (abilities, milestones, mods) can still be auditioned here.
+func _build_audio_browser(col: VBoxContainer) -> void:
+	col.add_child(NeonUI.subheader("Library"))
+	col.add_child(NeonUI.label("Press a sound to hear it, press it again to stop.", 22, NeonUI.TEXT_DIM))
+	var groups: Array[String] = []
+	var by_group := {}
+	for e in AudioLib.entries:
+		var g := "%s: %s" % ["Music" if e["kind"] == "music" else "Sound effects", e["category"]]
+		if not by_group.has(g):
+			by_group[g] = []
+			groups.append(g)
+		by_group[g].append(e)
+	for g in groups:
+		col.add_child(NeonUI.label(g, 26, NeonUI.TEXT))
+		var flow := HFlowContainer.new()
+		flow.add_theme_constant_override("h_separation", 10)
+		flow.add_theme_constant_override("v_separation", 10)
+		col.add_child(flow)
+		for e in by_group[g]:
+			var id: String = e["id"]
+			var b := _audition_button(_entry_label(e, true))
+			b.pressed.connect(func() -> void: _toggle_preview(id))
+			flow.add_child(b)
 
-func _launcher_preview() -> Control:
-	var size := Vector2(64.0, 64.0)
-	var c := Control.new()
-	c.custom_minimum_size = size
-	c.draw.connect(func() -> void:
-		var accent := Skins.ball().color
-		var center := size * 0.5
-		if Skins.launcher().shape == Skins.LauncherShape.PROBE_CANNON:
-			Shooter.draw_probe_cannon(c, Vector2(center.x, size.y - 14.0), Vector2.UP, 0.55)
-		elif Skins.launcher().shape == Skins.LauncherShape.CANNON:
-			c.draw_rect(Rect2(Vector2(center.x - 9.0, 6.0), Vector2(18.0, size.y - 26.0)), Color("#4b5563"), true)
-			c.draw_circle(Vector2(center.x, size.y - 16.0), 18.0, Color("#242830"))
-			c.draw_circle(Vector2(center.x, 10.0), 8.0, accent)
-		else:
-			c.draw_circle(center, size.x * 0.35, accent))
-	Skins.changed.connect(c.queue_redraw)
-	return c
+## "Attract Mode" for an original, "Attract Mode A: Layer by layer" for a variation.
+## Effects drop the name because the row's caption already says it.
+func _entry_label(e: Dictionary, with_name: bool) -> String:
+	var base: String = e["name"] if with_name else ""
+	if e["original"]:
+		return base if with_name else "Original"
+	var v := "%s: %s" % [e["variant"], e["label"]]
+	return "%s %s" % [base, v] if with_name else v
+
+func _toggle_preview(id: String) -> void:
+	if AudioLib.is_previewing(id):
+		AudioLib.stop_preview()
+	else:
+		AudioLib.preview(id)
+
+## Audition buttons already play what they audition, so they skip the UI click.
+func _audition_button(text: String) -> Button:
+	var b := NeonUI.chip(text)
+	b.set_meta("no_ui_sound", true)
+	return b

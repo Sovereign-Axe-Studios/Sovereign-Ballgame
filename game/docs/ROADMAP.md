@@ -106,6 +106,12 @@
       tiles and skin chips). First unlock is the Outer Wilds constellation on
       the title screen (HANDOFF §15). The GDD's "new random mod every 25
       rounds" is not built
+- [x] Neon geometric UI across every menu; animated title (HANDOFF §16)
+- [x] Skins pack: 22 ball looks (10 basic colours + 12 drawn), 7 animated
+      backgrounds that react to board-cleared / new-ball; live previews and
+      reaction triggers in the Asset Viewer
+- [x] Board-cleared detection (`Game.board_cleared`), used by backgrounds;
+      the milestone audio cue still waits on audio
 - [ ] Audio: BG, SFX, button click, collection, milestone stingers
 - [ ] Consumables from milestones: delete a tile, shift up, 2048 slam,
       tapsplosion

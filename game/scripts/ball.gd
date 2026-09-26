@@ -5,12 +5,14 @@ extends CharacterBody2D
 
 signal finished(ball: Ball)                       ## crossed the floor, or timed out
 signal block_damaged(block: Block, damage: int)
+signal wall_bounced                               ## reflected off a side wall or the ceiling (Game plays the sound; previews stay silent)
 
 var rules: GameRules
 var direction := Vector2.UP
 ## Bounces so far (walls and blocks), counted after each contact's damage.
 ## Generic ball state for BALL_COLLISION mods (Snowball today).
 var bounces: int = 0
+var _return_tween: Tween
 ## Tint while rewinding (Time Rewind).
 const REWIND_COLOR := Color("#6fb6ff")
 ## Path recording cap, in points (one per physics frame): 30 s at 120 Hz.
@@ -21,7 +23,11 @@ var _path := PackedVector2Array()
 var _rewinding: bool = false
 var _rewind_cursor: float = 0.0
 var _rewind_speed: float = 1.0
-## Recent global positions for a skin's comet tail, newest last.
+## How far the ball has rolled, radians (distance / radius) -- ball looks
+## rotate their surface detail by it.
+var spin: float = 0.0
+var _last_pos := Vector2.ZERO
+## Recent global positions for a look's tail, newest last.
 const TRAIL_POINTS := 10
 var _trail := PackedVector2Array()
 ## Ghost-matter flecks in the tail: [global position, seconds left].
@@ -37,6 +43,7 @@ func _ready() -> void:
 func launch(r: GameRules, from: Vector2, dir: Vector2) -> void:
 	rules = r
 	global_position = from
+	_last_pos = from
 	direction = dir.normalized()
 	_recording = r.wants_path_recording()
 	if _recording:
@@ -52,16 +59,22 @@ func launch(r: GameRules, from: Vector2, dir: Vector2) -> void:
 ## than having them just vanish where they landed -- see Game._end_round.
 ## `delay` staggers the START of the movement (Skins.ReturnMode's ordered /
 ## random variants); the ball still sits frozen at its landing spot until then.
-func return_to(target: Vector2, duration: float, delay: float = 0.0) -> void:
+## `free_on_arrival = false` parks it at `target` instead (LINE_UP waits in
+## its slot until the round resolves); a later return_to replaces the move.
+func return_to(target: Vector2, duration: float, delay: float = 0.0, free_on_arrival: bool = true) -> void:
+	if _return_tween != null and _return_tween.is_valid():
+		_return_tween.kill()
 	var start := global_position
 	if start.distance_to(target) < 1.0:
 		if delay > 0.0:
 			await get_tree().create_timer(delay).timeout
-		queue_free()
+		if free_on_arrival:
+			queue_free()
 		return
 	var arc := randf_range(30.0, 120.0)
 	var control := (start + target) * 0.5 + Vector2(0.0, -arc)
 	var tw := create_tween()
+	_return_tween = tw
 	if delay > 0.0:
 		tw.tween_interval(delay)
 	tw.tween_method(
@@ -71,7 +84,8 @@ func return_to(target: Vector2, duration: float, delay: float = 0.0) -> void:
 			global_position = a.lerp(b, t),
 		0.0, 1.0, duration
 	)
-	tw.tween_callback(queue_free)
+	if free_on_arrival:
+		tw.tween_callback(queue_free)
 
 func _physics_process(delta: float) -> void:
 	if _done or rules == null:
@@ -110,14 +124,19 @@ func _physics_process(delta: float) -> void:
 			block_damaged.emit(collider, dealt)
 		elif is_wall:
 			_apply_corner_jitter(collision.get_position())
+			wall_bounced.emit()
 		bounces += 1
+		queue_redraw()
 
 		_enforce_vertical()
 		# Ease off the surface so the next substep does not start embedded.
 		global_position += normal * 0.5
 
 	rules.on_ball_moved(self)
+	spin += global_position.distance_to(_last_pos) / maxf(1.0, rules.ball_radius) * signf(direction.x + 0.001)
+	_last_pos = global_position
 	_update_trail(delta)
+	queue_redraw()
 	if _recording and _path.size() < MAX_PATH_POINTS:
 		_path.append(global_position)
 	if global_position.y >= rules.floor_y:
@@ -182,7 +201,7 @@ func _enforce_vertical() -> void:
 
 func _update_trail(delta: float) -> void:
 	var skin := Skins.ball()
-	if not skin.trail:
+	if skin.trail_color.a <= 0.0:
 		if not _trail.is_empty():
 			_trail.clear()
 			_flecks.clear()
@@ -192,6 +211,9 @@ func _update_trail(delta: float) -> void:
 		_trail.remove_at(0)
 	if randf() < skin.fleck_chance and _trail.size() > 2:
 		_flecks.append([_trail[randi_range(0, _trail.size() - 2)], 0.4])
+	for fleck: Array in _flecks:
+		# Flecks drift back and out, embers and flakes alike.
+		fleck[0] = (fleck[0] as Vector2) + Vector2(randf_range(-20, 20), randf_range(-20, 20)) * delta
 	for fleck: Array in _flecks:
 		fleck[1] = float(fleck[1]) - delta
 	_flecks = _flecks.filter(func(fk: Array) -> bool: return float(fk[1]) > 0.0)
@@ -208,12 +230,16 @@ func _draw() -> void:
 	if rules == null:
 		return
 	var skin := Skins.ball()
-	if skin.trail and _trail.size() > 1:
+	var radius := rules.ball_radius * rules.ball_draw_scale(self)
+	if skin.trail_color.a > 0.0 and _trail.size() > 1:
 		for i in range(_trail.size() - 1):
 			var f := float(i + 1) / float(_trail.size())
 			draw_line(to_local(_trail[i]), to_local(_trail[i + 1]),
-				Color(skin.trail_color, f * 0.8), rules.ball_radius * 1.6 * f, true)
+				Color(skin.trail_color, f * 0.8), radius * 1.6 * f, true)
 		for fleck: Array in _flecks:
-			draw_circle(to_local(fleck[0]), rules.ball_radius * 0.25, Color("#6dff8a", float(fleck[1]) / 0.4))
-	draw_circle(Vector2.ZERO, rules.ball_radius, REWIND_COLOR if _rewinding else skin.color)
-	draw_circle(Vector2(-rules.ball_radius * 0.3, -rules.ball_radius * 0.3), rules.ball_radius * 0.3, skin.highlight)
+			draw_circle(to_local(fleck[0]), radius * 0.25, Color(skin.fleck_color, float(fleck[1]) / 0.4))
+	if _rewinding:
+		draw_circle(Vector2.ZERO, radius, REWIND_COLOR)
+	else:
+		skin.draw(self, Vector2.ZERO, radius, spin, _age)
+	rules.draw_ball_overlay(self, radius)

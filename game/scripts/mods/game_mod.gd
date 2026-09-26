@@ -107,6 +107,15 @@ func on_firing_tick(_rules: GameRules, _game: Game, _seconds: float) -> void:
 func damage_for(rules: GameRules, _ball: Ball) -> int:
 	return rules.ball_damage
 
+## Visual size multiplier for `ball` (cosmetic: the collider stays
+## rules.ball_radius, so a big-looking ball still fits the gaps it did).
+func ball_draw_scale(_rules: GameRules, _ball: Ball) -> float:
+	return 1.0
+
+## Draw extras on top of `ball`, in its local space (Snowball's power label).
+func draw_ball_overlay(_rules: GameRules, _ball: Ball, _radius: float) -> void:
+	pass
+
 
 # -------------------------------------------------------------------- WALL
 

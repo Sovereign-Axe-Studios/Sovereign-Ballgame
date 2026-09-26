@@ -175,6 +175,12 @@ func open_slots() -> int:
 func shots_for_round(ball_count: int) -> int:
 	return _slot(GameMod.Category.BALL_COLLISION).shots_for_round(self, ball_count)
 
+func ball_draw_scale(ball: Ball) -> float:
+	return _slot(GameMod.Category.BALL_COLLISION).ball_draw_scale(self, ball)
+
+func draw_ball_overlay(ball: Ball, radius: float) -> void:
+	_slot(GameMod.Category.BALL_COLLISION).draw_ball_overlay(self, ball, radius)
+
 func wants_path_recording() -> bool:
 	return _slot(GameMod.Category.BALL_COLLISION).wants_path_recording(self)
 

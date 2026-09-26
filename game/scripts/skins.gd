@@ -4,8 +4,9 @@ extends Node
 ## side-by-side comparison from the pause menu's Skins page (visuals) and
 ## Debug Menu (ball-return mode).
 ##
-## Mostly dev-facing test variants: no art assets (there aren't any yet), and
-## the SELECTION is session-only like `Debug`, not `Settings`, since "which
+## Every look is drawn in code (no art assets): ball looks in
+## scripts/skins/balls/, animated backgrounds in scripts/skins/backgrounds/.
+## The SELECTION is session-only like `Debug`, not `Settings`, since "which
 ## one was I comparing" isn't worth remembering across a restart. A few skins
 ## are earned: `locked_by` names an `Unlocks` id, and a locked skin can't be
 ## selected through any setter.
@@ -16,34 +17,42 @@ signal changed
 const LOCKED_NAME := "???"
 const LOCKED_HINT := "Look to the stars."
 
-## Shared by every skin record: its name, and the unlock that gates it.
-class SkinRecord:
-	var skin_name: String
-	var locked_by: StringName = &""
-	func is_locked() -> bool:
-		return not Unlocks.is_unlocked(locked_by)
+## Ball looks: one file each under scripts/skins/balls/ (see BallLook).
+## Add a look = a file + a line here. The basic colours are plain BallLooks.
+const BALL_LOOKS: Array[GDScript] = [
+	preload("res://scripts/skins/balls/beach_ball.gd"),
+	preload("res://scripts/skins/balls/planet.gd"),
+	preload("res://scripts/skins/balls/disco_ball.gd"),
+	preload("res://scripts/skins/balls/marble.gd"),
+	preload("res://scripts/skins/balls/eight_ball.gd"),
+	preload("res://scripts/skins/balls/golf_ball.gd"),
+	preload("res://scripts/skins/balls/basketball.gd"),
+	preload("res://scripts/skins/balls/meteor.gd"),
+	preload("res://scripts/skins/balls/snowball.gd"),
+	preload("res://scripts/skins/balls/pearl.gd"),
+	preload("res://scripts/skins/balls/apple.gd"),
+	preload("res://scripts/skins/balls/interloper.gd"),
+]
 
-class BallSkin extends SkinRecord:
-	var color: Color
-	var highlight: Color
-	## A comet tail behind the ball (Interloper). Off for plain skins.
-	var trail: bool = false
-	var trail_color := Color.TRANSPARENT
-	## Chance per frame of a green ghost-matter fleck in the tail.
-	var fleck_chance: float = 0.0
-	func _init(n: String, c: Color, h: Color) -> void:
-		skin_name = n
-		color = c
-		highlight = h
+## Plain-colour balls, listed first in the picker. "Classic" is the default.
+const BASIC_COLORS := {
+	"Classic": Color("#eceff1"), "Red": Color("#e53935"), "Orange": Color("#fb8c00"),
+	"Yellow": Color("#fdd835"), "Green": Color("#43a047"), "Cyan": Color("#22d3ee"),
+	"Blue": Color("#1e88e5"), "Purple": Color("#8e24aa"), "Pink": Color("#ec4899"),
+	"Charcoal": Color("#37474f"),
+}
 
 class BackgroundSkin extends SkinRecord:
+	## Flat fill, and the tint menus read.
 	var color: Color
-	## True = Game adds an animated EndTimesBackground node instead of the
-	## flat `color` fill (`color` still tints menus that read it).
-	var animated: bool = false
-	func _init(n: String, c: Color) -> void:
+	## An AnimatedBackground script Game instances behind the playfield in
+	## place of the flat fill. null = flat.
+	var scene: GDScript
+	func _init(n: String, c: Color, s: GDScript = null, lock: StringName = &"") -> void:
 		skin_name = n
 		color = c
+		scene = s
+		locked_by = lock
 
 class BlockSkin extends SkinRecord:
 	var ramp: Array[Color]
@@ -82,21 +91,30 @@ const RETURN_MODE_NAMES := {
 	ReturnMode.LINE_UP: "Line up immediately",
 }
 
-var ball_skins: Array[BallSkin] = [
-	BallSkin.new("Classic", Palette.BALL, Color(1, 1, 1, 0.55)),
-	BallSkin.new("Neon Cyan", Color("#22d3ee"), Color(1, 1, 1, 0.6)),
-	BallSkin.new("Magma", Color("#ff6b35"), Color("#ffe08a")),
-	BallSkin.new("Violet", Color("#a78bfa"), Color(1, 1, 1, 0.55)),
-	_interloper(),
-]
+var ball_skins: Array[BallLook] = _build_ball_looks()
 
 var background_skins: Array[BackgroundSkin] = [
 	BackgroundSkin.new("Void", Palette.BACKGROUND),
 	BackgroundSkin.new("Indigo Night", Color("#161129")),
 	BackgroundSkin.new("Deep Forest", Color("#0f1a14")),
 	BackgroundSkin.new("Crimson Dusk", Color("#1a1013")),
-	_end_times(),
+	BackgroundSkin.new("Synthwave", Color("#1a0b2e"), preload("res://scripts/skins/backgrounds/synthwave.gd")),
+	BackgroundSkin.new("Arcade", Color("#050510"), preload("res://scripts/skins/backgrounds/arcade.gd")),
+	BackgroundSkin.new("Mosaic", Color("#0d1a2a"), preload("res://scripts/skins/backgrounds/mosaic.gd")),
+	BackgroundSkin.new("Geometric", NeonUI.BG, preload("res://scripts/skins/backgrounds/geometric.gd")),
+	BackgroundSkin.new("Aurora", Color("#040a14"), preload("res://scripts/skins/backgrounds/aurora.gd")),
+	BackgroundSkin.new("Lava Lamp", Color("#1c0b12"), preload("res://scripts/skins/backgrounds/lava_lamp.gd")),
+	BackgroundSkin.new("End Times", Color("#06080c"), preload("res://scripts/skins/backgrounds/end_times.gd"),
+		Unlocks.OUTER_WILDS),
 ]
+
+static func _build_ball_looks() -> Array[BallLook]:
+	var out: Array[BallLook] = []
+	for n: String in BASIC_COLORS:
+		out.append(BallLook.new(n, BASIC_COLORS[n]))
+	for script in BALL_LOOKS:
+		out.append(script.new() as BallLook)
+	return out
 
 ## Each ramp is read the same way Palette.ROYGBIV was: low health at index 0,
 ## full health at the last index, lerped between neighbours.
@@ -121,21 +139,7 @@ var launcher_skins: Array[LauncherSkin] = [
 ]
 
 # --- Outer Wilds extras (unlocked by the title-screen constellation) --------
-
-## The comet: an ice-white core, a cyan tail, now and then a ghost-matter fleck.
-static func _interloper() -> BallSkin:
-	var s := BallSkin.new("Interloper", Color("#e8f4ff"), Color(1, 1, 1, 0.8))
-	s.trail = true
-	s.trail_color = Color("#7fe3ff")
-	s.fleck_chance = 0.12
-	s.locked_by = Unlocks.OUTER_WILDS
-	return s
-
-static func _end_times() -> BackgroundSkin:
-	var s := BackgroundSkin.new("End Times", EndTimesBackground.BG_COLOR)
-	s.animated = true
-	s.locked_by = Unlocks.OUTER_WILDS
-	return s
+# (The Interloper ball and End Times background are registered above.)
 
 static func _probe_cannon() -> LauncherSkin:
 	var s := LauncherSkin.new("Orbital Probe Cannon", LauncherShape.PROBE_CANNON)
@@ -148,7 +152,7 @@ var block_index: int = 0
 var launcher_index: int = 0
 var return_mode: ReturnMode = ReturnMode.STICK_ALL_AT_ONCE
 
-func ball() -> BallSkin:
+func ball() -> BallLook:
 	return ball_skins[ball_index]
 
 func background() -> BackgroundSkin:

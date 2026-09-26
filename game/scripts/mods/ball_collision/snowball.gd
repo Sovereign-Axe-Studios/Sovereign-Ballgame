@@ -6,6 +6,13 @@ extends GameMod
 const BALL_DIVISOR := 3
 ## Extra damage per bounce the ball has made so far (walls and blocks).
 const DAMAGE_PER_BOUNCE := 1
+## Visual growth per bounce, and its cap (x the normal radius). Cosmetic: the
+## collider doesn't grow, so a snowball still fits the gaps it could before.
+const GROWTH_PER_BOUNCE := 0.12
+const MAX_DRAW_SCALE := 2.5
+## The power label under the ball.
+const LABEL_SIZE := 26
+const LABEL_COLOR := Color("#f4c0d1")
 
 func _init() -> void:
 	category = Category.BALL_COLLISION
@@ -17,6 +24,14 @@ func shots_for_round(_rules: GameRules, ball_count: int) -> int:
 
 func damage_for(rules: GameRules, ball: Ball) -> int:
 	return rules.ball_damage + ball.bounces * DAMAGE_PER_BOUNCE
+
+func ball_draw_scale(_rules: GameRules, ball: Ball) -> float:
+	return minf(MAX_DRAW_SCALE, 1.0 + ball.bounces * GROWTH_PER_BOUNCE)
+
+## Its current hit power, just under the ball.
+func draw_ball_overlay(rules: GameRules, ball: Ball, radius: float) -> void:
+	PreviewDraw.text(ball, Vector2(0.0, radius + LABEL_SIZE * 0.7), str(damage_for(rules, ball)),
+		LABEL_SIZE, LABEL_COLOR)
 
 ## A ball swelling with every bounce, its damage counting up.
 func draw_preview(c: CanvasItem, r: Rect2, t: float) -> void:

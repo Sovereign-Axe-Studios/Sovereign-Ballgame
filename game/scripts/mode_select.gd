@@ -8,7 +8,7 @@ extends Node2D
 ##           Tiles animate their draw_preview on hover; the ? corner opens a
 ##           detail panel with a live mini-board (ModLivePreview). Locked mods
 ##           show as ??? silhouettes. NEXT starts the run.
-## Built in code in the title screen's arcade style (ArcadeUI), like every
+## Built in code in the neon style (NeonUI) over a GeometricBackdrop, like every
 ## other screen here. Esc steps back a page, then to the title screen.
 
 const TITLE_SCENE := "res://scenes/main_menu.tscn"
@@ -26,6 +26,7 @@ var _custom_page: Control
 var _picks: Dictionary = {}
 
 func _ready() -> void:
+	add_child(GeometricBackdrop.new())
 	_build_ui()
 	_show(_list_page)
 
@@ -40,8 +41,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_tree().change_scene_to_file(TITLE_SCENE)
 	get_viewport().set_input_as_handled()
 
-func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, _viewport_size()), Skins.background().color.darkened(0.2), true)
 
 func _viewport_size() -> Vector2:
 	return Vector2(
@@ -97,9 +96,7 @@ func _page(title: String) -> Array:
 	col.add_theme_constant_override("separation", 24)
 	margin.add_child(col)
 
-	var header := ArcadeUI.label(title, 64, Skins.ball().color)
-	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(header)
+	col.add_child(NeonUI.header(title))
 	col.add_child(_spacer(20.0))
 	return [scroll, col]
 
@@ -113,21 +110,21 @@ func _build_list_page() -> Control:
 	var col: VBoxContainer = parts[1]
 
 	for mode: Dictionary in CuratedModes.all():
-		var btn := ArcadeUI.button("▶ " + str(mode.name).to_upper())
+		var btn := NeonUI.button(str(mode.name).to_upper(), true)
 		var mode_name: String = mode.name
 		var mode_mods: Array[GDScript] = mode.mods
 		btn.pressed.connect(func() -> void: Run.start(mode_name, mode_mods))
 		col.add_child(btn)
-		col.add_child(ArcadeUI.label("%s\n%s" % [mode.description, _mod_names(mode_mods)], 24, Palette.TEXT_DIM))
+		col.add_child(NeonUI.label("%s\n%s" % [mode.description, _mod_names(mode_mods)], 24, NeonUI.TEXT_DIM))
 		col.add_child(_spacer(12.0))
 
-	var custom_btn := ArcadeUI.button("✎ CUSTOM")
+	var custom_btn := NeonUI.button("CUSTOM")
 	custom_btn.pressed.connect(func() -> void: _show(_custom_page))
 	col.add_child(custom_btn)
-	col.add_child(ArcadeUI.label("Pick one mod per category.", 24, Palette.TEXT_DIM))
+	col.add_child(NeonUI.label("Pick one mod per category.", 24, NeonUI.TEXT_DIM))
 	col.add_child(_spacer(40.0))
 
-	var back_btn := ArcadeUI.button("BACK")
+	var back_btn := NeonUI.button("BACK")
 	back_btn.pressed.connect(func() -> void: get_tree().change_scene_to_file(TITLE_SCENE))
 	col.add_child(back_btn)
 	return parts[0]
@@ -155,11 +152,11 @@ func _build_custom_page() -> Control:
 
 	var nav := HBoxContainer.new()
 	nav.add_theme_constant_override("separation", 24)
-	var back_btn := ArcadeUI.button("BACK")
+	var back_btn := NeonUI.button("BACK")
 	back_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	back_btn.pressed.connect(func() -> void: _show(_list_page))
 	nav.add_child(back_btn)
-	var next_btn := ArcadeUI.button("NEXT ▶")
+	var next_btn := NeonUI.button("NEXT", true)
 	next_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	next_btn.pressed.connect(_start_custom)
 	nav.add_child(next_btn)
@@ -172,7 +169,7 @@ func _build_custom_page() -> Control:
 func _category_row(c: GameMod.Category, entries: Array) -> VBoxContainer:
 	var row := VBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
-	row.add_child(ArcadeUI.label("▌" + GameMod.category_name(c).to_upper(), 30, Skins.ball().color))
+	row.add_child(NeonUI.subheader(GameMod.category_name(c)))
 
 	var tiles := HFlowContainer.new()
 	tiles.add_theme_constant_override("h_separation", 14)
@@ -201,7 +198,7 @@ func _category_row(c: GameMod.Category, entries: Array) -> VBoxContainer:
 ## One mod tile: animated icon + name, and a ? corner button that opens the
 ## detail panel. `mod == null` is the None tile.
 func _tile(mod: GameMod, locked: bool) -> Button:
-	var tile := ArcadeUI.chip("")
+	var tile := NeonUI.chip("", 0.0)
 	tile.custom_minimum_size = TILE_SIZE
 	tile.clip_contents = true
 
@@ -213,7 +210,7 @@ func _tile(mod: GameMod, locked: bool) -> Button:
 	var label_text := "None"
 	if mod != null:
 		label_text = "???" if locked else mod.display_name
-	var name_label := ArcadeUI.label(label_text, 20, Palette.TEXT)
+	var name_label := NeonUI.label(label_text, 20, NeonUI.TEXT)
 	name_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	name_label.clip_text = true
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -240,7 +237,7 @@ func _tile(mod: GameMod, locked: bool) -> Button:
 	help.add_theme_font_size_override("font_size", 22)
 	help.add_theme_color_override("font_color", PreviewDraw.GLOW)
 	for state in ["normal", "hover", "pressed"]:
-		var sb := ArcadeUI.style(state != "normal")
+		var sb := NeonUI.box(state != "normal", NeonUI.MAGENTA, 0.0)
 		sb.set_content_margin_all(2.0)
 		sb.set_border_width_all(2)
 		help.add_theme_stylebox_override(state, sb)
@@ -271,7 +268,7 @@ func _open_detail(mod: GameMod) -> void:
 
 	var vp := _viewport_size()
 	var panel := PanelContainer.new()
-	var panel_style := ArcadeUI.style(false)
+	var panel_style := NeonUI.panel_style()
 	panel_style.set_content_margin_all(32.0)
 	panel.add_theme_stylebox_override("panel", panel_style)
 	panel.custom_minimum_size = Vector2(PAGE_WIDTH, 0.0)
@@ -281,9 +278,9 @@ func _open_detail(mod: GameMod) -> void:
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 18)
 	panel.add_child(col)
-	col.add_child(ArcadeUI.label(GameMod.category_name(mod.category).to_upper(), 24, Palette.TEXT_DIM))
-	col.add_child(ArcadeUI.label(mod.display_name, 52, Skins.ball().color))
-	col.add_child(ArcadeUI.label(mod.description, 28))
+	col.add_child(NeonUI.label(GameMod.category_name(mod.category).to_upper(), 24, NeonUI.TEXT_DIM))
+	col.add_child(NeonUI.label(mod.display_name, 52, NeonUI.CYAN))
+	col.add_child(NeonUI.label(mod.description, 28))
 
 	var preview_box := CenterContainer.new()
 	col.add_child(preview_box)
@@ -298,7 +295,7 @@ func _open_detail(mod: GameMod) -> void:
 		big.playing = true
 		preview_box.add_child(big)
 
-	var close_btn := ArcadeUI.button("CLOSE")
+	var close_btn := NeonUI.button("CLOSE")
 	close_btn.pressed.connect(_close_detail)
 	col.add_child(close_btn)
 

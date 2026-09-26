@@ -1,12 +1,12 @@
 class_name EndTimesBackground
-extends Node2D
+extends AnimatedBackground
 ## The End Times background skin: a starfield living through the end of the
 ## universe on a loop. Stars blink out one by one, some going supernova on
 ## the way; once the last one is gone there's a big-bang flash from the
 ## centre, a fresh set streams outward and settles, and it starts over.
 ##
-## Game adds this (show_behind_parent) while the active background skin is
-## `animated`, and skips its own flat fill, so walls and blocks draw on top.
+## Board cleared: an instant big bang. New ball: the nearest living star goes
+## supernova. Unlocked by the title-screen constellation.
 
 const STAR_COUNT := 80
 ## One full cycle: death, darkness, big bang, new stars settling.
@@ -27,8 +27,6 @@ const SETTLE_START := 0.88
 ## its ring spreads for the same again after.
 const NOVA_LENGTH := 0.03
 
-var _view := Vector2.ZERO
-var _t: float = 0.0
 var _cycle: int = -1
 var _rest := PackedVector2Array()      ## where this cycle's stars sit
 var _next_rest := PackedVector2Array() ## where the next cycle's will settle
@@ -37,19 +35,34 @@ var _nova: Array[bool] = []
 var _size := PackedFloat32Array()
 
 func _ready() -> void:
-	show_behind_parent = true
-	_view = Vector2(
-		float(ProjectSettings.get_setting("display/window/size/viewport_width")),
-		float(ProjectSettings.get_setting("display/window/size/viewport_height")))
+	super()
 	_next_rest = _random_positions()
 	_start_cycle(0)
 
 func _process(delta: float) -> void:
-	_t += delta
-	var cycle := int(_t / CYCLE_SECONDS)
+	super(delta)
+	var cycle := int(t / CYCLE_SECONDS)
 	if cycle != _cycle:
 		_start_cycle(cycle)
-	queue_redraw()
+
+## Skip straight to this cycle's big bang.
+func on_board_cleared(_pos: Vector2) -> void:
+	t = float(_cycle) * CYCLE_SECONDS + BANG_AT * CYCLE_SECONDS
+
+## The nearest star still alive goes supernova right now.
+func on_new_ball(pos: Vector2) -> void:
+	var p := fposmod(t, CYCLE_SECONDS) / CYCLE_SECONDS
+	if p >= DEATHS_END:
+		return
+	var best := -1
+	var best_d := INF
+	for i in range(STAR_COUNT):
+		if p < _death[i] - NOVA_LENGTH and _rest[i].distance_to(pos) < best_d:
+			best_d = _rest[i].distance_to(pos)
+			best = i
+	if best >= 0:
+		_nova[best] = true
+		_death[best] = p + NOVA_LENGTH
 
 func _start_cycle(cycle: int) -> void:
 	_cycle = cycle
@@ -66,13 +79,13 @@ func _start_cycle(cycle: int) -> void:
 func _random_positions() -> PackedVector2Array:
 	var out := PackedVector2Array()
 	for i in range(STAR_COUNT):
-		out.append(Vector2(randf() * _view.x, randf() * _view.y))
+		out.append(Vector2(randf() * view.x, randf() * view.y))
 	return out
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, _view), BG_COLOR, true)
-	var p := fposmod(_t, CYCLE_SECONDS) / CYCLE_SECONDS
-	var center := _view * 0.5
+	draw_rect(Rect2(Vector2.ZERO, view), BG_COLOR, true)
+	var p := fposmod(t, CYCLE_SECONDS) / CYCLE_SECONDS
+	var center := view * 0.5
 
 	if p < SETTLE_START:
 		for i in range(STAR_COUNT):
@@ -86,8 +99,14 @@ func _draw() -> void:
 
 	if p >= BANG_AT and p < BANG_AT + BANG_LENGTH * 2.0:
 		var b := (p - BANG_AT) / (BANG_LENGTH * 2.0)
-		var radius := _view.length() * b
-		draw_circle(center, radius, Color(1, 1, 1, (1.0 - b) * 0.9))
+		# A glowing burst: soft layered falloff and a bright shock ring,
+		# not a flat disc.
+		var radius := view.length() * b
+		for i in range(6):
+			var f := 1.0 - i / 6.0
+			draw_circle(center, radius * f, Color(1.0, 0.9, 0.7, (1.0 - b) * 0.22))
+		draw_circle(center, radius * 0.12, Color(1, 1, 1, 1.0 - b))
+		draw_arc(center, radius, 0.0, TAU, 64, Color(1.0, 0.9, 0.7, (1.0 - b) * 0.9), 10.0 * (1.0 - b) + 2.0, true)
 
 func _draw_dying_star(i: int, p: float) -> void:
 	var pos := _rest[i]
@@ -104,5 +123,5 @@ func _draw_dying_star(i: int, p: float) -> void:
 			return
 	if p >= death:
 		return
-	var twinkle := 0.5 + 0.35 * sin(_t * 1.3 + float(i) * 1.7)
+	var twinkle := 0.5 + 0.35 * sin(t * 1.3 + float(i) * 1.7)
 	draw_circle(pos, _size[i], Color(STAR_COLOR, twinkle))

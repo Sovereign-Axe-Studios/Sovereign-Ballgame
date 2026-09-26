@@ -36,6 +36,13 @@ func unlock_all() -> void:
 		_unlocked[id] = true
 	_save_and_notify()
 
+## Forget one unlock (the Debug Menu's Outer Wilds reset).
+func relock(id: StringName) -> void:
+	if not _unlocked.has(id):
+		return
+	_unlocked.erase(id)
+	_save_and_notify()
+
 func relock_all() -> void:
 	_unlocked.clear()
 	_save_and_notify()

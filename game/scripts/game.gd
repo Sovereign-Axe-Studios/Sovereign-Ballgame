@@ -7,6 +7,11 @@ extends Node2D
 
 enum State { AIMING, FIRING, RESOLVING, GAME_OVER }
 
+## The last block on the board was destroyed (once per clear).
+signal board_cleared(at: Vector2)
+## A +1 pickup's dropped ball landed.
+signal new_ball(at: Vector2)
+
 const BallScene := preload("res://scenes/ball.tscn")
 const DEBUG_MOVE_SPEED := 700.0 ## px/sec for the debug left/right launch-position nudge.
 const SHOOTER_SLIDE_DURATION := 0.28
@@ -14,6 +19,10 @@ const BALL_RETURN_MIN_DURATION := 0.32
 const BALL_RETURN_MAX_DURATION := 0.5
 const BALL_RETURN_STAGGER := 0.08 ## per-ball delay step for the ordered/random Stick variants.
 const LINE_UP_SPACING := 50.0
+## Audio: a block that spawned with at least this value breaks with the "big" sound.
+const BIG_BLOCK_VALUE := 20
+## Audio: the danger warning plays when a block is within this many rows of the death row.
+const DANGER_ROWS := 2
 
 ## Drop a .tres here to run the game under different rules. Empty = defaults.
 @export var rules: GameRules
@@ -58,7 +67,10 @@ var field := Playfield.new()
 ## +1 pickups still dropping. Credited at round end even if they haven't
 ## landed yet -- see _end_round.
 var _falling_balls: Array[FallingBall] = []
-var _animated_bg: EndTimesBackground
+var _animated_bg: AnimatedBackground
+## Set once the board empties; cleared when blocks exist again, so
+## board_cleared fires once per clear.
+var _board_was_clear: bool = false
 ## Seconds since this round's first shot (rules.on_firing_tick).
 var _firing_time: float = 0.0
 
@@ -83,6 +95,7 @@ func _ready() -> void:
 	Skins.changed.connect(queue_redraw)
 	Skins.changed.connect(_sync_animated_background)
 	_sync_animated_background()
+	AudioLib.play_game_music(round_number)
 
 	_layout_playfield()
 	_prime_board()
@@ -221,17 +234,19 @@ func _tick_firing(delta: float) -> void:
 		_to_fire -= 1
 		_fire_cd += interval
 
-## An `animated` background skin (End Times) is a node drawn behind this
-## one, not a flat fill in _draw. Add or remove it to match the skin.
+## An animated background skin is a node drawn behind this one, not a flat
+## fill in _draw. Swap it to match the current skin.
 func _sync_animated_background() -> void:
-	var want := Skins.background().animated
-	if want and not is_instance_valid(_animated_bg):
-		_animated_bg = EndTimesBackground.new()
-		add_child(_animated_bg)
-		move_child(_animated_bg, 0)
-	elif not want and is_instance_valid(_animated_bg):
+	var want: GDScript = Skins.background().scene
+	if is_instance_valid(_animated_bg) and _animated_bg.get_script() == want:
+		return
+	if is_instance_valid(_animated_bg):
 		_animated_bg.queue_free()
 		_animated_bg = null
+	if want != null:
+		_animated_bg = want.new() as AnimatedBackground
+		add_child(_animated_bg)
+		move_child(_animated_bg, 0)
 
 ## Cancel this round's unfired shots (Time Rewind). The round still ends the
 ## normal way, once every ball already out has finished.
@@ -255,10 +270,13 @@ func _spawn_ball() -> void:
 	shooter.flash()
 	ball.finished.connect(_on_ball_finished)
 	ball.block_damaged.connect(_on_block_damaged)
+	ball.wall_bounced.connect(AudioLib.play_sfx.bind("bounce"))
+	AudioLib.play_sfx("launch")
 	_live_balls += 1
 
 func _on_ball_finished(ball: Ball) -> void:
 	_live_balls -= 1
+	AudioLib.play_sfx("land")
 	if not _has_landing:
 		_has_landing = true
 		_landing_x = clampf(
@@ -275,7 +293,11 @@ func _on_ball_finished(ball: Ball) -> void:
 		Skins.ReturnMode.MOVE_TO_SHOOTER:
 			ball.return_to(_launch_target(), randf_range(BALL_RETURN_MIN_DURATION, BALL_RETURN_MAX_DURATION))
 		Skins.ReturnMode.LINE_UP:
-			ball.return_to(_next_line_up_slot(), randf_range(BALL_RETURN_MIN_DURATION, BALL_RETURN_MAX_DURATION))
+			# Parks in its slot (not freed) and waits in _landed_balls; the
+			# whole line gathers to the shooter in _end_round.
+			ball.return_to(_next_line_up_slot(), randf_range(BALL_RETURN_MIN_DURATION, BALL_RETURN_MAX_DURATION),
+				0.0, false)
+			_landed_balls.append(ball)
 		_:
 			# STICK_* -- frozen where it landed until _end_round moves it.
 			_landed_balls.append(ball)
@@ -296,22 +318,35 @@ func _next_line_up_slot() -> Vector2:
 	var slot := _line_up_count
 	_line_up_count += 1
 	var center_x := (_play_left + _play_right) * 0.5
-	var x := center_x + (float(slot) - float(ball_count - 1) * 0.5) * LINE_UP_SPACING
-	return Vector2(clampf(x, _play_left, _play_right), rules.floor_y + 40.0)
+	# Squeeze the spacing so the whole round's balls fit between the walls,
+	# instead of clamping the overflow into a pile at each end.
+	var count := maxi(1, rules.shots_for_round(ball_count))
+	var span := (_play_right - _play_left) - rules.ball_radius * 2.0
+	var spacing := minf(LINE_UP_SPACING, span / float(maxi(1, count - 1)))
+	var x := center_x + (float(slot) - float(count - 1) * 0.5) * spacing
+	return Vector2(clampf(x, _play_left, _play_right), rules.floor_y + 26.0)
 
 func _on_block_damaged(block: Block, damage: int) -> void:
 	round_damage += damage
 	total_damage += damage
+	AudioLib.play_sfx("hit")
 	if is_instance_valid(block) and block.value > 0:
 		_spawn_hit_chunks(block.global_position, block.get_color(), block.get_size())
 	_refresh_hud()
 
 func _on_block_destroyed(block: Block) -> void:
+	AudioLib.play_sfx("break_big" if block.start_value >= BIG_BLOCK_VALUE else "break_small")
 	_spawn_destroy_fragments(block.global_position, block.get_color(), block.get_size())
+	if not _board_was_clear and grid.block_count() == 0:
+		_board_was_clear = true
+		board_cleared.emit(block.global_position)
+		if is_instance_valid(_animated_bg):
+			_animated_bg.on_board_cleared(block.global_position)
 
 ## Cosmetic-only: the actual +1 doesn't land until the dropped ball visually
 ## reaches the floor -- see _on_powerup_ball_landed.
 func _on_pickup_collected(pickup: BallPickup) -> void:
+	AudioLib.play_sfx("pickup")
 	var falling := FallingBall.new()
 	effects_root.add_child(falling)
 	falling.global_position = pickup.global_position
@@ -323,6 +358,9 @@ func _on_pickup_collected(pickup: BallPickup) -> void:
 ## (it does when the round's balls all land before the pickup does).
 func _on_powerup_ball_landed(ball: FallingBall) -> void:
 	_falling_balls.erase(ball)
+	new_ball.emit(ball.global_position)
+	if is_instance_valid(_animated_bg):
+		_animated_bg.on_new_ball(ball.global_position)
 	if ball.credited:
 		return
 	pending_balls += 1
@@ -385,7 +423,13 @@ func _end_round() -> void:
 			_game_over()
 			return
 		round_number += 1
+		AudioLib.set_round(round_number)
+	AudioLib.play_sfx("row_shift")
+	if _blocks_near_death():
+		AudioLib.play_sfx("danger")
 	rules.on_round_end(field)
+	if grid.block_count() > 0:
+		_board_was_clear = false
 
 	shooter.active = true
 	shooter.queue_redraw()
@@ -394,11 +438,22 @@ func _end_round() -> void:
 
 func _game_over() -> void:
 	state = State.GAME_OVER
+	AudioLib.stop_music(1.2)
+	AudioLib.play_sfx("game_over")
 	shooter.active = false
 	shooter.queue_redraw()
 	print("DEBUG: lose game -- a block reached row %d on round %d (total damage %d)"
 		% [rules.death_row(), round_number, total_damage])
 	hud.show_game_over(round_number, total_damage)
+
+## True when any block has crept to within DANGER_ROWS of the death row.
+func _blocks_near_death() -> bool:
+	var first_danger_row := rules.death_row() - DANGER_ROWS
+	for row in range(maxi(0, first_danger_row), grid.cells.size()):
+		for item in grid.cells[row]:
+			if item is Block:
+				return true
+	return false
 
 func _refresh_hud() -> void:
 	hud.refresh(round_number, ball_count, pending_balls, round_damage, total_damage, rules.status_lines())
@@ -461,6 +516,7 @@ func debug_ball_count_delta(delta: int) -> void:
 
 func debug_round_delta(delta: int) -> void:
 	round_number = maxi(1, round_number + delta)
+	AudioLib.set_round(round_number)
 	_refresh_hud()
 
 ## Shift the whole field up one row and bank a credit: the next `abs(delta)`
@@ -566,7 +622,7 @@ func _draw() -> void:
 		return
 	var vp_w := float(ProjectSettings.get_setting("display/window/size/viewport_width"))
 	var vp_h := float(ProjectSettings.get_setting("display/window/size/viewport_height"))
-	if not Skins.background().animated:
+	if Skins.background().scene == null:
 		draw_rect(Rect2(Vector2.ZERO, Vector2(vp_w, vp_h)), Skins.background().color, true)
 
 	# Walls and ceiling.

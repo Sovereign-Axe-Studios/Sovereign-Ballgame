@@ -83,9 +83,11 @@ that can end a round, and it does so on `_to_fire <= 0 and _live_balls <= 0`.
 | `scripts/mods/game_mod.gd` | `GameMod` — base for every mod: category, text, hooks | Stock hooks hand back to `GameRules.default_*`. See §14. |
 | `scripts/mods/<category>/*.gd` | One mod per file, `const` tunables at the top | Registered by one line in `cfg.gd`'s Mods section. See §14. |
 | `scripts/run_state.gd` | `Run` autoload — the session's mode (name + mod scripts) | `Run.start()` sets it and loads the game. See §14. |
-| `scripts/mode_select.gd` | `ModeSelect` — curated list + Custom per-category picker | Built in code with `ArcadeUI`. See §14. |
+| `scripts/mode_select.gd` | `ModeSelect` — curated list + Custom per-category picker | Built in code with `NeonUI`. See §14, §16. |
 | `scripts/modes/curated_modes.gd` | `CuratedModes.all()` — the two placeholder modes | A function, not a const: `Cfg` isn't a const expression. |
-| `scripts/ui/arcade_ui.gd` | `ArcadeUI` — title-screen button/chip/label styles | Shared by `MainMenu` and `ModeSelect`. |
+| `scripts/ui/neon_ui.gd` | `NeonUI` — the neon look: buttons, chips, toggles, sliders, pages, modals | Every menu builds from it. See §16. |
+| `scripts/ui/settings_panel.gd`, `skins_panel.gd` | Shared Settings / Skins controls | Used by the pause menu, title and Asset Viewer. |
+| `scripts/skins/` | `SkinRecord`, `BallLook` (+ `balls/*.gd`), `AnimatedBackground` (+ `backgrounds/*.gd`) | One file per look. See §16. |
 | `scripts/tools/check_mods.gd` | Headless registry check | Run `scenes/tools/check_mods.tscn`, not `-s`. See §14. |
 
 Scenes are deliberately thin. `main.tscn` is `Main` (Game) with eight
@@ -869,4 +871,95 @@ New hooks: `on_run_start` / `on_round_end` (every mod, get a `Playfield`),
 - Tests that unlock things restored the real save afterwards.
 - **Not verified:** how the hover animations feel, the tooltips, and the
   bloom timing, all of which need hands on a mouse.
+
+---
+
+## 16. Neon UI, skins pack, board events, the Nomai reveal
+
+Design: `docs/specs/2026-09-25-neon-ui-skins-reveal-design.md`.
+
+### Fixes that came first
+- The pause-menu pages had collapsed to about 325 px of the 920 px panel.
+  The ScrollContainer's child didn't expand, and autowrap labels in an HBox
+  shrank to one character per line. `NeonUI.page()` now builds every
+  scrolling page with the fix baked in, and `NeonUI.label()` expands by
+  default.
+- The ball-return dropdown's popup is its own window with a tiny default
+  theme; `NeonUI.option_button()` styles it.
+- **Line up** never formed a line: `Ball.return_to` freed each ball on
+  arrival. It now takes `free_on_arrival` (false for LINE_UP, which parks the
+  ball in `_landed_balls`), and slots squeeze to fit the round's ball count.
+- **Snowball** shows its power under each ball, and it looks bigger per
+  bounce. The new BALL_COLLISION hooks `ball_draw_scale` and
+  `draw_ball_overlay` are cosmetic only; the collider doesn't grow.
+- Debug Menu: **Unlock** / **Reset** for the Outer Wilds egg
+  (`Unlocks.relock(id)`).
+
+### Neon UI
+- `NeonUI` replaces `ArcadeUI`. The look: `#07060f` ground, cyan and magenta,
+  slanted `StyleBoxFlat.skew` buttons with a glow. `EDGE_PAD` keeps the slant
+  overhang from being clipped by scroll areas.
+- `GeometricBackdrop`: drifting wireframe polygons with mouse parallax, on the
+  title, Mode Select, the Asset Viewer, faintly behind the pause menu, and as
+  the Geometric background skin. `burst()` and `spawn_at()` are its reactions.
+- The pause menu is a centred panel. `SettingsPanel` and `SkinsPanel` are
+  shared (the title has a new **Skins** button).
+- **Title layout rule:** the button column starts below
+  `NomaiConstellation.AREA`. A button over a star swallows the click (and
+  would start a game) instead of lighting the star.
+
+### Skins
+- `SkinRecord` (`scripts/skins/skin_record.gd`) is the base. `BallLook`: one
+  file per look in `scripts/skins/balls/`, registered in
+  `Skins.BALL_LOOKS`. The 10 basic colours are plain `BallLook`s from
+  `Skins.BASIC_COLORS`.
+  - Looks draw with `draw(canvas, pos, r, spin, t)`. `Ball.spin` accumulates
+    distance / radius, so the surface rolls while the lighting stays put.
+  - Trails and flecks (Meteor, Snowball, Interloper) are generic in `Ball`,
+    driven by `trail_color` / `fleck_*`.
+  - `BallLook` has helpers (`shade`, `wedge`, `band`, `inside_line`,
+    `ellipse_points`), because canvas drawing can't clip to a circle.
+- `AnimatedBackground`: one file per background in
+  `scripts/skins/backgrounds/`, referenced by `BackgroundSkin.scene`. `Game`
+  swaps the node to match the skin, and skips its flat fill when one is
+  present. End Times moved here.
+  - The backgrounds: Synthwave, Arcade, Mosaic, Geometric, Aurora (tall
+    hem-lit curtains), Lava Lamp, End Times.
+
+### Board events
+- `Game.board_cleared(at)` fires when a block's destruction empties the grid,
+  once per clear, re-armed after a round with blocks. This closes the old
+  loose end.
+- `Game.new_ball(at)` fires when a pickup's dropped ball lands.
+- `Game` forwards both to the active `AnimatedBackground`
+  (`on_board_cleared` / `on_new_ball`).
+
+### Asset Viewer
+The Skins tab opens with `SkinPreview`: the current look rolling on a strip,
+plus the real background node running at 42% in a SubViewport, with
+**Board cleared** / **New ball** buttons that fire its reactions. The Modes
+tab lists every mod with its icon (hover animates it).
+
+### Nomai reveal
+`OuterWildsReveal` (`scripts/title/outer_wilds_reveal.gd`) replaces the
+banner. `MainMenu` saves the unlock as soon as the last star lights, then
+opens the reveal:
+1. The screen dims.
+2. The original flavour text writes itself along an Archimedean spiral.
+3. Five cards flip in with live previews: the Interloper, the probe cannon,
+   an End Times sketch, and the two mod sketches.
+4. CONTINUE appears.
+
+A click skips to the end. It sets its size explicitly, because under a
+CanvasLayer the anchors hadn't resolved by the first draw.
+
+### Checks
+- `scenes/tools/check_skins.tscn` draws every look and runs every background
+  through both events. Result: 22 looks and 11 backgrounds, clean.
+  `check_mods` is clean too.
+- The regression auto-play with skins active is clean.
+- Windowed screenshots: every screen, the ball gallery, every background idle
+  and mid-event, the Asset Viewer's triggers, and the reveal at each stage.
+- **By eye, still for Theo:** the mouse parallax, the hover feel, the reveal
+  pacing, and the per-background reaction timing.
 

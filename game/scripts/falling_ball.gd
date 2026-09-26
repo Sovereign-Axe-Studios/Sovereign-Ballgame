@@ -33,6 +33,4 @@ func _process(delta: float) -> void:
 		queue_free()
 
 func _draw() -> void:
-	var skin := Skins.ball()
-	draw_circle(Vector2.ZERO, _radius, skin.color)
-	draw_circle(Vector2(-_radius * 0.3, -_radius * 0.3), _radius * 0.3, skin.highlight)
+	Skins.ball().draw(self, Vector2.ZERO, _radius, position.y / _radius, 0.0)

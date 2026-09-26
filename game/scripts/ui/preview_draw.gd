@@ -20,10 +20,14 @@ static func at(r: Rect2, u: float, v: float) -> Vector2:
 static func px(r: Rect2, f: float) -> float:
 	return f * minf(r.size.x, r.size.y)
 
-static func ball(c: CanvasItem, pos: Vector2, radius: float, color: Color = Color.TRANSPARENT) -> void:
-	var skin := Skins.ball()
-	c.draw_circle(pos, radius, skin.color if color.a == 0.0 else color)
-	c.draw_circle(pos + Vector2(-radius, -radius) * 0.3, radius * 0.3, skin.highlight)
+## The current ball look, or a flat disc of `color` if one is given.
+static func ball(c: CanvasItem, pos: Vector2, radius: float, color: Color = Color.TRANSPARENT,
+		spin: float = 0.0, t: float = 0.0) -> void:
+	if color.a == 0.0:
+		Skins.ball().draw(c, pos, radius, spin, t)
+		return
+	c.draw_circle(pos, radius, color)
+	c.draw_circle(pos + Vector2(-radius, -radius) * 0.3, radius * 0.3, Color(1, 1, 1, 0.55))
 
 ## A block like Block._draw: fill, lighter outline, value label.
 static func block(c: CanvasItem, center: Vector2, size: float, value: int,

@@ -1,295 +1,165 @@
 class_name MainMenu
 extends Node2D
-## Title screen: Quick Play / Play / Settings / States (stub) / Asset Viewer.
+## Title screen: Quick Play / Play / Skins / Settings / States (stub) / Asset
+## Viewer, over the neon GeometricBackdrop and a sparse starfield -- the
+## Nomai constellation easter egg hides among the stars.
 ## Quick Play starts a no-mods run immediately; Play opens Mode Select.
 ##
 ## Built in code, no .tscn UI -- consistent with every other screen in this
-## project (see docs/HANDOFF.md §7). Settings is an in-place overlay (same
-## show/hide pattern as PauseMenu's pages, since it's a quick "adjust and come
-## right back"); Asset Viewer is a separate scene, since it's a full browsing
-## screen, not a dialog. States is a stub -- there's no save-state system yet
-## (see the Debug Menu's own "Save game state" stub).
+## project (see docs/HANDOFF.md §7). Settings and Skins are in-place overlays
+## (the shared SettingsPanel / SkinsPanel); Asset Viewer is a separate scene,
+## since it's a full browsing screen, not a dialog. States is a stub -- there's
+## no save-state system yet.
 
 const MODE_SELECT_SCENE := "res://scenes/mode_select.tscn"
 const ASSET_VIEWER_SCENE := "res://scenes/asset_viewer.tscn"
-const STAR_COUNT := 70
+const STAR_COUNT := 60
+const BUTTON_WIDTH := 640.0
+## Top of the two-line title; the subtitle and buttons hang below it.
+const TITLE_Y := 250.0
+const TITLE_LINE_STEP := 118.0
+const OVERLAY_SIZE := Vector2(940.0, 1500.0)
 
 var _stars: Array[Dictionary] = [] ## {pos: Vector2, radius: float, phase: float}
-var _blocks: Array[Dictionary] = [] ## {pos: Vector2, size: float, rot: float, speed: float}
 var _t: float = 0.0
 
 var _root: Control
 var _layer: CanvasLayer
-var _settings_overlay: Control
-var _ui_scale_slider: HSlider
-var _shake_slider: HSlider
-var _sfx_slider: HSlider
-var _music_slider: HSlider
-var _grid_toggle: Button
-var _grid_thickness_slider: HSlider
+var _title_lines: Array[Label] = []
+var _overlay: Control
 
 func _ready() -> void:
 	randomize()
-	_build_background_data()
-	# Drawn over the starfield (this node's _draw) and under the UI layer.
+	var vp := NeonUI.view_size()
+	for i in range(STAR_COUNT):
+		_stars.append({
+			"pos": Vector2(randf_range(0.0, vp.x), randf_range(0.0, vp.y)),
+			"radius": randf_range(1.0, 2.4),
+			"phase": randf_range(0.0, TAU),
+		})
+	# Behind this node's own _draw (the stars), which is behind the
+	# constellation, which is behind the UI layer.
+	var backdrop := GeometricBackdrop.new()
+	backdrop.show_behind_parent = true
+	add_child(backdrop)
 	var constellation := NomaiConstellation.new()
 	add_child(constellation)
 	constellation.completed.connect(_on_constellation_completed)
 	_build_ui()
-
-func _build_background_data() -> void:
-	var vp := _viewport_size()
-	for i in range(STAR_COUNT):
-		_stars.append({
-			"pos": Vector2(randf_range(0.0, vp.x), randf_range(0.0, vp.y)),
-			"radius": randf_range(1.0, 2.6),
-			"phase": randf_range(0.0, TAU),
-		})
-	for i in range(3):
-		_blocks.append({
-			"pos": Vector2(randf_range(0.15, 0.85) * vp.x, randf_range(0.1, 0.55) * vp.y),
-			"size": randf_range(140.0, 260.0),
-			"rot": randf_range(0.0, TAU),
-			"speed": randf_range(-0.08, 0.08),
-		})
+	AudioLib.play_menu_music()
 
 func _process(delta: float) -> void:
 	_t += delta
-	for b in _blocks:
-		b.rot += b.speed * delta
+	# A slow neon breathe on the title.
+	var glow := 0.35 + 0.25 * sin(_t * 1.4)
+	for line in _title_lines:
+		line.add_theme_color_override("font_outline_color", Color(NeonUI.MAGENTA, glow))
 	queue_redraw()
 
-func _viewport_size() -> Vector2:
-	return Vector2(
-		float(ProjectSettings.get_setting("display/window/size/viewport_width")),
-		float(ProjectSettings.get_setting("display/window/size/viewport_height"))
-	)
-
 func _draw() -> void:
-	var vp := _viewport_size()
-	draw_rect(Rect2(Vector2.ZERO, vp), Skins.background().color.darkened(0.2), true)
-
-	# A few large, dim, slowly-rotating squares in the current block skin's
-	# colour -- a nod to what the game is about, not a literal scene replay.
-	var ramp: Array[Color] = Skins.block().ramp
-	for i in range(_blocks.size()):
-		var b: Dictionary = _blocks[i]
-		var color: Color = ramp[i % ramp.size()]
-		color.a = 0.06
-		var half: float = b.size * 0.5
-		var corners := PackedVector2Array([
-			Vector2(-half, -half).rotated(b.rot), Vector2(half, -half).rotated(b.rot),
-			Vector2(half, half).rotated(b.rot), Vector2(-half, half).rotated(b.rot),
-		])
-		var offset: Vector2 = b.pos
-		var points := PackedVector2Array()
-		for c in corners:
-			points.append(c + offset)
-		draw_colored_polygon(points, color)
-
 	for star in _stars:
-		var pos: Vector2 = star.pos
-		var alpha: float = 0.35 + 0.35 * sin(_t * 1.6 + star.phase)
-		draw_circle(pos, star.radius, Color(1, 1, 1, clampf(alpha, 0.1, 0.85)))
+		var alpha: float = 0.3 + 0.3 * sin(_t * 1.6 + star.phase)
+		draw_circle(star.pos, star.radius, Color(1, 1, 1, clampf(alpha, 0.08, 0.7)))
+
+## Esc closes an open overlay.
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("pause") and _overlay != null:
+		_close_overlay()
+		get_viewport().set_input_as_handled()
 
 
 # ------------------------------------------------------------------- layout
 
 func _build_ui() -> void:
-	var vp := _viewport_size()
-	var layer := CanvasLayer.new()
-	add_child(layer)
-	_layer = layer
+	var vp := NeonUI.view_size()
+	_layer = CanvasLayer.new()
+	add_child(_layer)
 
 	_root = Control.new()
 	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(_root)
+	_layer.add_child(_root)
 
-	var title := Label.new()
-	title.text = "SOVEREIGN BALLGAME"
-	title.position = Vector2(0.0, vp.y * 0.22)
-	title.size = Vector2(vp.x, 120.0)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 76)
-	title.add_theme_color_override("font_color", Skins.ball().color)
-	title.add_theme_color_override("font_outline_color", Color("#0a0d12"))
-	title.add_theme_constant_override("outline_size", 10)
-	_root.add_child(title)
+	# Two single-line labels: a multi-line Label spaces its lines far apart
+	# at this size.
+	for i in range(2):
+		var line := Label.new()
+		line.text = ["SOVEREIGN", "BALLGAME"][i]
+		line.position = Vector2(0.0, TITLE_Y + i * TITLE_LINE_STEP)
+		line.size = Vector2(vp.x, 140.0)
+		line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		line.add_theme_font_size_override("font_size", 104)
+		line.add_theme_color_override("font_color", NeonUI.CYAN)
+		line.add_theme_constant_override("outline_size", 18)
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_root.add_child(line)
+		_title_lines.append(line)
 
-	var subtitle := Label.new()
-	subtitle.text = "A BALLZ-STYLE BRICK BREAKER"
-	subtitle.position = Vector2(0.0, vp.y * 0.22 + 128.0)
-	subtitle.size = Vector2(vp.x, 60.0)
+	var subtitle := NeonUI.label("A BALLZ-STYLE BRICK BREAKER", 28, NeonUI.TEXT_SOFT)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.add_theme_font_size_override("font_size", 28)
-	subtitle.add_theme_color_override("font_color", Palette.TEXT_DIM)
+	subtitle.position = Vector2(0.0, TITLE_Y + TITLE_LINE_STEP * 2.0 + 10.0)
+	subtitle.size = Vector2(vp.x, 50.0)
+	subtitle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(subtitle)
 
 	var button_col := VBoxContainer.new()
-	button_col.position = Vector2(vp.x * 0.5 - 340.0, vp.y * 0.5)
-	button_col.size = Vector2(680.0, 0.0)
-	button_col.add_theme_constant_override("separation", 26)
+	# Below the constellation's area: a button over a star would swallow the
+	# click (and start a game) instead of lighting it.
+	var buttons_y := NomaiConstellation.AREA.end.y + 50.0
+	button_col.position = Vector2((vp.x - BUTTON_WIDTH) * 0.5, buttons_y)
+	button_col.size = Vector2(BUTTON_WIDTH, 0.0)
+	button_col.add_theme_constant_override("separation", 28)
 	_root.add_child(button_col)
 
-	var quick_btn := ArcadeUI.button("⚡ QUICK PLAY")
+	var quick_btn := NeonUI.button("QUICK PLAY", true)
 	quick_btn.pressed.connect(func() -> void: Run.start("Quick Play", []))
 	button_col.add_child(quick_btn)
 
-	var play_btn := ArcadeUI.button("▶ PLAY")
+	var play_btn := NeonUI.button("PLAY")
 	play_btn.pressed.connect(func() -> void: get_tree().change_scene_to_file(MODE_SELECT_SCENE))
 	button_col.add_child(play_btn)
 
-	var settings_btn := ArcadeUI.button("⚙ SETTINGS")
-	settings_btn.pressed.connect(_open_settings)
+	var skins_btn := NeonUI.button("SKINS")
+	skins_btn.pressed.connect(func() -> void: _open_overlay("Skins", SkinsPanel.new()))
+	button_col.add_child(skins_btn)
+
+	var settings_btn := NeonUI.button("SETTINGS")
+	settings_btn.pressed.connect(func() -> void: _open_overlay("Settings", SettingsPanel.new()))
 	button_col.add_child(settings_btn)
 
-	var states_btn := ArcadeUI.button("👾 GAME STATES")
+	var states_btn := NeonUI.button("GAME STATES")
 	states_btn.disabled = true
 	states_btn.tooltip_text = "Stub -- no save-state system yet (see the Debug Menu's Save game state stub)."
 	button_col.add_child(states_btn)
 
-	var viewer_btn := ArcadeUI.button("◆ ASSET VIEWER")
+	var viewer_btn := NeonUI.button("ASSET VIEWER")
 	viewer_btn.pressed.connect(func() -> void: get_tree().change_scene_to_file(ASSET_VIEWER_SCENE))
 	button_col.add_child(viewer_btn)
 
-	_build_settings_overlay(layer, vp)
+## A centred neon modal: title, `content` in a scrolling column, BACK.
+func _open_overlay(title: String, content: Control) -> void:
+	_close_overlay()
+	var parts := NeonUI.modal(_layer, OVERLAY_SIZE, NeonUI.view_size(), 0.75)
+	_overlay = parts[0]
+	var page := NeonUI.page(0.0, 0)
+	(parts[1] as PanelContainer).add_child(page[0])
+	var col: VBoxContainer = page[1]
+	col.add_child(NeonUI.header(title))
+	col.add_child(content)
+	var back := NeonUI.button("BACK")
+	back.pressed.connect(_close_overlay)
+	col.add_child(back)
+
+func _close_overlay() -> void:
+	if _overlay != null:
+		_overlay.queue_free()
+		_overlay = null
 
 # ------------------------------------------------------ Outer Wilds unlock
 
-## The constellation's bloom is ~1.5 s; the banner lands as it peaks, and the
-## unlock is saved at the same moment so quitting early still keeps it.
+## Saved the moment the last star lights (so quitting mid-reveal still keeps
+## it); the reveal opens as the constellation's bloom peaks.
 func _on_constellation_completed() -> void:
-	await get_tree().create_timer(NomaiConstellation.BLOOM_SECONDS * 0.5).timeout
 	Unlocks.unlock(Unlocks.OUTER_WILDS)
-	_show_unlock_banner()
-
-func _show_unlock_banner() -> void:
-	var vp := _viewport_size()
-	var overlay := Control.new()
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	_layer.add_child(overlay)
-
-	var dim := ColorRect.new()
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0, 0, 0, 0.55)
-	overlay.add_child(dim)
-
-	var panel := PanelContainer.new()
-	var style := ArcadeUI.style(false)
-	style.border_color = NomaiConstellation.LINE_COLOR
-	style.set_content_margin_all(36.0)
-	panel.add_theme_stylebox_override("panel", style)
-	panel.custom_minimum_size = Vector2(820.0, 0.0)
-	panel.position = Vector2((vp.x - 820.0) * 0.5, vp.y * 0.3)
-	overlay.add_child(panel)
-
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 16)
-	panel.add_child(col)
-	var title := ArcadeUI.label("OUTER WILDS EXTRAS UNLOCKED", 44, NomaiConstellation.LINE_COLOR)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(title)
-	for line in [
-		"Mod: Wormholes (Wall)",
-		"Mod: Time Rewind (Ball collision)",
-		"Ball skin: Interloper",
-		"Launcher skin: Orbital Probe Cannon",
-		"Background: End Times",
-	]:
-		col.add_child(ArcadeUI.label("✦ " + line, 28))
-	var ok_btn := ArcadeUI.button("OK")
-	ok_btn.pressed.connect(overlay.queue_free)
-	col.add_child(ok_btn)
-
-
-# ------------------------------------------------------------ settings overlay
-
-func _open_settings() -> void:
-	_sync_settings_fields()
-	_settings_overlay.visible = true
-
-func _close_settings() -> void:
-	_settings_overlay.visible = false
-
-func _sync_settings_fields() -> void:
-	_ui_scale_slider.value = Settings.ui_scale * 100.0
-	_shake_slider.value = Settings.screen_shake_strength * 100.0
-	_sfx_slider.value = Settings.sfx_volume * 100.0
-	_music_slider.value = Settings.music_volume * 100.0
-	_grid_toggle.button_pressed = Settings.show_background_grid
-	_grid_thickness_slider.value = Settings.grid_line_thickness
-
-func _build_settings_overlay(layer: CanvasLayer, vp: Vector2) -> void:
-	_settings_overlay = Control.new()
-	_settings_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_settings_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	_settings_overlay.visible = false
-	layer.add_child(_settings_overlay)
-
-	var dim := ColorRect.new()
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0, 0, 0, 0.7)
-	_settings_overlay.add_child(dim)
-
-	var panel := PanelContainer.new()
-	panel.position = Vector2(vp.x * 0.5 - 460.0, vp.y * 0.5 - 560.0)
-	panel.custom_minimum_size = Vector2(920.0, 1120.0)
-	_settings_overlay.add_child(panel)
-
-	var margin := MarginContainer.new()
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_%s" % side, 36)
-	panel.add_child(margin)
-
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 20)
-	margin.add_child(col)
-
-	var header := Label.new()
-	header.text = "SETTINGS"
-	header.add_theme_font_size_override("font_size", 44)
-	header.add_theme_color_override("font_color", Palette.TEXT)
-	col.add_child(header)
-
-	_ui_scale_slider = _slider_row(col, "UI scale", 50.0, 200.0)
-	_ui_scale_slider.value_changed.connect(func(v: float) -> void: Settings.set_ui_scale(v / 100.0))
-
-	_shake_slider = _slider_row(col, "Screen shake strength", 0.0, 100.0)
-	_shake_slider.value_changed.connect(func(v: float) -> void: Settings.set_screen_shake_strength(v / 100.0))
-
-	_sfx_slider = _slider_row(col, "SFX volume", 0.0, 100.0)
-	_sfx_slider.value_changed.connect(func(v: float) -> void: Settings.set_sfx_volume(v / 100.0))
-
-	_music_slider = _slider_row(col, "Music volume", 0.0, 100.0)
-	_music_slider.value_changed.connect(func(v: float) -> void: Settings.set_music_volume(v / 100.0))
-
-	_grid_toggle = ArcadeUI.button("Show background grid")
-	_grid_toggle.toggle_mode = true
-	_grid_toggle.custom_minimum_size.y = 76.0
-	_grid_toggle.toggled.connect(func(pressed: bool) -> void: Settings.set_show_background_grid(pressed))
-	col.add_child(_grid_toggle)
-
-	_grid_thickness_slider = _slider_row(col, "Background grid line thickness", 0.5, 4.0)
-	_grid_thickness_slider.step = 0.5
-	_grid_thickness_slider.value_changed.connect(func(v: float) -> void: Settings.set_grid_line_thickness(v))
-
-	var back_btn := ArcadeUI.button("BACK")
-	back_btn.pressed.connect(_close_settings)
-	col.add_child(back_btn)
-
-func _slider_row(col: VBoxContainer, caption: String, lo: float, hi: float) -> HSlider:
-	var l := Label.new()
-	l.text = caption
-	l.add_theme_font_size_override("font_size", 24)
-	l.add_theme_color_override("font_color", Palette.TEXT)
-	col.add_child(l)
-	var s := HSlider.new()
-	s.min_value = lo
-	s.max_value = hi
-	s.step = 1.0
-	s.custom_minimum_size = Vector2(0.0, 40.0)
-	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	col.add_child(s)
-	return s
+	await get_tree().create_timer(NomaiConstellation.BLOOM_SECONDS * 0.5).timeout
+	_layer.add_child(OuterWildsReveal.new())
