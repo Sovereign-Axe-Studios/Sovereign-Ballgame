@@ -1,0 +1,1578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ballgame Sound Lab</title>
+<!-- Fonts are optional: the page falls back to system fonts when offline -->
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600&family=JetBrains+Mono:wght@400;600&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* Single committed look: a neon arcade screen, matching the game's own title screen. */
+  :root {
+    color-scheme: dark;
+    --bg: #0a0918; --panel: #131030; --panel-2: #1b1745; --line: #2f2a6b;
+    --text: #ebe8ff; --muted: #a19cd6;
+    --cyan: #3ff0ff; --magenta: #ff3fa4; --yellow: #ffd23f; --green: #56f58a;
+    --orange: #ff8a3d; --violet: #a77bff; --red: #ff4d5e;
+    --display: 'Silkscreen', 'Courier New', monospace;
+    --body: 'Chakra Petch', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 15px/1.55 var(--body); padding-inline: 16px; padding-block: 0 96px; }
+  .wrap { max-width: 1180px; margin-inline: auto; }
+  h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; text-wrap: balance; letter-spacing: .02em; }
+  p { margin: 0; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+  /* ---------- transport bar ---------- */
+  .transport { position: sticky; top: 0; z-index: 10; margin-inline: -16px; padding: 10px 16px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+  .transport-in { max-width: 1180px; margin-inline: auto; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+  .now { flex: 1 1 220px; min-width: 0; }
+  .now .label { font: 600 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .12em; }
+  .now .title { font: 700 14px var(--display); color: var(--cyan); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dots { display: flex; gap: 3px; margin-top: 4px; }
+  .dots i { width: 8px; height: 8px; background: var(--line); display: block; }
+  .dots i.beat { background: #4a4390; }
+  .dots i.on { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+  canvas#scope { width: 200px; max-width: 100%; height: 40px; background: #07061a; border: 1px solid var(--line); }
+  .master { display: flex; align-items: center; gap: 8px; font: 600 11px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+  .master input { width: 110px; }
+
+  /* ---------- controls ---------- */
+  .btn { background: var(--panel-2); border: 1px solid var(--line); padding: 8px 14px; font: 600 13px var(--body); letter-spacing: .04em; text-transform: uppercase; border-radius: 0; }
+  .btn:hover { border-color: var(--cyan); color: var(--cyan); }
+  .btn.primary { background: var(--cyan); color: #04212a; border-color: var(--cyan); }
+  .btn.primary:hover { background: #8ff7ff; color: #04212a; }
+  .btn.playing { background: var(--magenta); border-color: var(--magenta); color: #2a0518; }
+  .btn.sm { padding: 4px 9px; font-size: 11px; }
+  .btn:disabled { opacity: .5; cursor: progress; }
+  input[type=range] { accent-color: var(--cyan); }
+
+  header.hero { padding-block: 34px 18px; }
+  .hero h1 { font-size: clamp(28px, 6vw, 46px); line-height: 1.05; }
+  .hero h1 span { color: var(--magenta); }
+  .hero .lede { max-width: 66ch; margin-top: 14px; color: var(--muted); font-size: 16px; }
+  .news { margin-top: 20px; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .news div { border: 1px solid var(--line); background: var(--panel); padding: 12px 14px; font-size: 13.5px; }
+  .news b { display: block; font: 700 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--yellow); margin-bottom: 4px; }
+
+  section { padding-block: 26px 4px; }
+  section > h2 { font-size: 20px; display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  section > h2::before { content: ''; width: 14px; height: 14px; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+  section > .sub { color: var(--muted); margin-bottom: 16px; max-width: 72ch; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); padding: 16px; }
+  .knobs { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px 18px; }
+  .knob label, .knob .lbl { display: flex; justify-content: space-between; font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin-bottom: 4px; }
+  .knob label output { color: var(--text); }
+  .knob input[type=range], .knob select { width: 100%; }
+  .knob select { background: var(--panel-2); border: 1px solid var(--line); padding: 6px 8px; border-radius: 0; }
+  .knob.check label { display: flex; justify-content: flex-start; gap: 8px; align-items: center; margin: 0; padding-top: 22px; }
+  .divider { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line); }
+  .tierline { font: 500 12px var(--mono); color: var(--muted); margin-top: 6px; }
+  .tierline b { color: var(--green); font-weight: 600; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  .hint { color: var(--muted); font-size: 13px; }
+
+  /* ---------- families and cards ---------- */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+  .grp { margin-top: 22px; }
+  .grp > h3 { font-size: 13px; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--hue); text-transform: uppercase; }
+  .grp > h3::before { content: ''; width: 12px; height: 12px; background: var(--hue); box-shadow: 0 0 8px var(--hue); }
+  .fam { background: var(--panel); border: 1px solid var(--line); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .fam.multi { grid-column: 1 / -1; }
+  .fam-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; align-items: baseline; }
+  .fam-head h4 { font-size: 14px; }
+  .fam-head p { color: var(--muted); font-size: 13.5px; flex: 1 1 260px; }
+  .tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); }
+  .tile { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line); background: #0f0d27; }
+  .tile.orig { border-style: dashed; }
+  .tag { font: 600 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; padding: 2px 6px; border: 1px solid var(--hue, var(--cyan)); color: var(--hue, var(--cyan)); white-space: nowrap; align-self: flex-start; }
+  .tile .meta { font: 500 12px var(--mono); color: var(--muted); }
+  .tile .blurb { font-size: 13.5px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  /* SFX trigger reads like one of the game's blocks: a solid tile with its own hue */
+  .sfx-go { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 10px 12px; background: color-mix(in srgb, var(--hue) 14%, var(--panel-2)); border: 1px solid color-mix(in srgb, var(--hue) 55%, var(--line)); border-radius: 0; }
+  .sfx-go:hover { background: color-mix(in srgb, var(--hue) 26%, var(--panel-2)); border-color: var(--hue); }
+  .sfx-go:active { transform: translateY(1px); }
+  .sfx-go .tri { width: 0; height: 0; border-left: 12px solid var(--hue); border-block: 7px solid transparent; flex: none; }
+  .sfx-go strong { display: block; font: 700 13px var(--display); }
+  .sfx-go small { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.35; margin-top: 2px; }
+
+  details.mix { border-top: 1px dashed var(--line); padding-top: 8px; }
+  details.mix summary { cursor: pointer; font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+  details.mix .knobs { margin-top: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 14px; }
+  .exp-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .exp-row select { background: var(--panel-2); border: 1px solid var(--line); padding: 3px 6px; font-size: 12px; border-radius: 0; }
+
+  /* verdict chips */
+  .fb { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .fb .seg { display: inline-flex; }
+  .fb .seg button { background: transparent; border: 1px solid var(--line); padding: 3px 9px; font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); border-radius: 0; margin-left: -1px; }
+  .fb .seg button:hover { color: var(--text); }
+  .fb .seg button[aria-pressed=true][data-v=keep] { background: var(--green); border-color: var(--green); color: #052414; }
+  .fb .seg button[aria-pressed=true][data-v=tweak] { background: var(--yellow); border-color: var(--yellow); color: #2b2100; }
+  .fb .seg button[aria-pressed=true][data-v=cut] { background: var(--red); border-color: var(--red); color: #2c0509; }
+  .fb input[type=text] { flex: 1 1 120px; min-width: 0; background: #0d0b25; border: 1px solid var(--line); padding: 4px 8px; font-size: 13px; border-radius: 0; }
+
+  .summary textarea { width: 100%; min-height: 150px; background: #0d0b25; border: 1px solid var(--line); padding: 10px; font: 13px/1.5 var(--mono); resize: vertical; border-radius: 0; }
+  footer { margin-top: 40px; color: var(--muted); font-size: 13px; max-width: 72ch; }
+
+  #toast { position: fixed; right: 16px; bottom: 16px; max-width: min(420px, calc(100% - 32px)); background: var(--panel-2); border: 1px solid var(--cyan); padding: 10px 14px; font: 500 13px var(--mono); z-index: 20; }
+  #toast[hidden] { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Sticky transport: what is playing, step position, spectrum, master volume -->
+<div class="transport">
+  <div class="transport-in">
+    <div class="now">
+      <div class="label" id="nowLabel">Music</div>
+      <div class="title" id="nowTitle">Nothing playing</div>
+      <div class="dots" id="dots" aria-hidden="true"></div>
+    </div>
+    <canvas id="scope" width="400" height="80" aria-label="Live spectrum"></canvas>
+    <div class="master"><span>Master</span><input id="master" type="range" min="0" max="1" step="0.01" value="0.85" aria-label="Master volume"></div>
+    <button class="btn" id="stop" type="button" data-noclick>Stop music</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <header class="hero">
+    <h1>Ballgame <span>Sound Lab</span></h1>
+    <p class="lede">Round two. Your Keep, Tweak, and Cut marks are loaded. Everything you marked Tweak or Cut keeps its original for comparison and now has three new variations. Every music track has its own mix controls, and everything can be exported as WAV.</p>
+    <div class="news">
+      <div><b>Variations</b>Attract Mode and Chip Rush have three takes each. So do 14 sound effects. Originals sit first with a dashed border.</div>
+      <div><b>Per track mix</b>Open "Mix and feel" on any music card for key, tempo, brightness, echo, space, and level. Settings save on this device.</div>
+      <div><b>WAV export</b>Every sound has its own export button, and the Export panel builds a ZIP of everything for the audio team.</div>
+      <div><b>Shareable</b>This is one file with no dependencies. Send it to anyone and it runs in any modern browser.</div>
+    </div>
+  </header>
+
+  <!-- ================= PROJECT SETTINGS ================= -->
+  <section id="settings">
+    <h2>Project settings</h2>
+    <p class="sub">Buses match the Music and SFX buses in bus_layout.tres. Round and Danger only affect game tracks.</p>
+    <div class="panel">
+      <div class="knobs">
+        <div class="knob"><label for="musicVol">Music bus <output id="musicVolOut"></output></label><input id="musicVol" type="range" min="0" max="1" step="0.01" value="0.7"></div>
+        <div class="knob"><label for="sfxVol">SFX bus <output id="sfxVolOut"></output></label><input id="sfxVol" type="range" min="0" max="1" step="0.01" value="0.9"></div>
+        <div class="knob check"><label><input id="vary" type="checkbox" checked> Randomize SFX pitch a little</label></div>
+      </div>
+      <div class="knobs divider">
+        <div class="knob">
+          <label for="round">Round (game tracks) <output id="roundOut"></output></label>
+          <input id="round" type="range" min="1" max="50" step="1" value="1">
+          <div class="tierline" id="tierLine"></div>
+        </div>
+        <div class="knob">
+          <span class="lbl">Danger state</span>
+          <button class="btn" id="danger" type="button" aria-pressed="false">Blocks near the floor: off</button>
+          <div class="tierline">Adds a low tritone drone and a heartbeat, and speeds the loop up 7%.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= MUSIC ================= -->
+  <section id="music">
+    <h2>Music</h2>
+    <p class="sub">Loops are four bars. Game tracks add layers across five round tiers. Attract Mode variations open with a four bar build-up before the loop starts.</p>
+    <div class="grp" style="--hue: var(--magenta)"><h3>Menu music</h3><div class="grid" id="menuTracks"></div></div>
+    <div class="grp" style="--hue: var(--cyan)"><h3>Game music</h3><div class="grid" id="gameTracks"></div></div>
+  </section>
+
+  <!-- ================= SFX ================= -->
+  <section id="sfx">
+    <h2>Sound effects</h2>
+    <p class="sub">Families with variations have a "Play in order" button so you can compare back to back. Pitch shifts slightly each press unless you turn that off.</p>
+    <div id="sfxGroups"></div>
+  </section>
+
+  <!-- ================= EXPORT ================= -->
+  <section id="export">
+    <h2>Export</h2>
+    <p class="sub">Files are stereo WAV, uncompressed, with no master compression baked in and peaks kept under -0.2 dBFS. Music loops are rendered so the reverb and echo tail wraps onto the start, which makes them seamless. Sound effects have silence trimmed off the end. Your per track mix settings are used.</p>
+    <div class="panel">
+      <div class="knobs">
+        <div class="knob"><label for="expRate">Sample rate</label><select id="expRate"><option value="44100">44.1 kHz</option><option value="48000">48 kHz</option></select></div>
+        <div class="knob"><label for="expBits">Bit depth</label><select id="expBits"><option value="16">16 bit</option><option value="24">24 bit</option></select></div>
+        <div class="knob"><label for="expNorm">Level</label><select id="expNorm"><option value="0">As previewed</option><option value="1">Normalize each file to -1 dBFS</option></select></div>
+      </div>
+      <div class="knobs divider">
+        <div class="knob check"><label><input id="incMusic" type="checkbox" checked> Music</label></div>
+        <div class="knob check"><label><input id="incSfx" type="checkbox" checked> Sound effects</label></div>
+        <div class="knob check"><label><input id="incTiers" type="checkbox" checked> Game tracks at all 5 tiers</label></div>
+        <div class="knob check"><label><input id="incVars" type="checkbox" checked> Include variations</label></div>
+      </div>
+      <div class="row"><button class="btn primary" id="expAll" type="button" data-noclick>Export everything (ZIP)</button><span class="hint" id="expMsg" aria-live="polite"></span></div>
+    </div>
+  </section>
+
+  <!-- ================= FEEDBACK ================= -->
+  <section id="feedback">
+    <h2>Your direction</h2>
+    <p class="sub">Same as before: mark Keep, Tweak, or Cut on any tile, then build a summary to paste back to me. Mix changes that differ from the defaults are included.</p>
+    <div class="panel summary">
+      <label for="general" class="hint">General direction</label>
+      <textarea id="general" placeholder="Anything that applies across the board." style="min-height:90px"></textarea>
+      <div class="row"><button class="btn primary" id="gen" type="button">Build summary</button><button class="btn" id="copy" type="button">Copy summary</button><span class="hint" id="copyMsg" aria-live="polite"></span></div>
+      <textarea id="summary" readonly aria-label="Feedback summary" style="margin-top:12px"></textarea>
+    </div>
+    <footer>Every sound here is generated by code, not recorded. Exports are rendered offline from the same code, so what you hear is what you get.</footer>
+  </section>
+</div>
+
+<div id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+'use strict';
+
+/* =========================================================
+   Small helpers
+   ========================================================= */
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);           // MIDI note number to frequency
+const pct = v => Math.round(v * 100) + '%';
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* Bus level, game state, and export settings */
+const S = { musicVol: 0.7, sfxVol: 0.9, master: 0.85, vary: true, round: 1, danger: false, exp: { rate: 44100, bits: 16, norm: false } };
+
+/* Default feel for every music track. These are the values from your last mix. */
+const DEFAULT_MIX = { key: 0, tempo: 1.01, bright: 0.69, echo: 0.12, space: 0.48, vol: 1 };
+
+/* =========================================================
+   Audio graph
+   voices -> track gain -> musicBus -> (dry + echo + reverb) -> musicTone -> master
+   sfx    -> sfxBus -> master
+   master -> compressor (live only) -> analyser (live only) -> speakers
+   The same builder makes the live graph and the offline export graph.
+   ========================================================= */
+let ctx = null;     // the active AudioContext (live, or an OfflineAudioContext while exporting)
+let G = null;       // the active graph nodes
+
+function makeImpulse(c, seconds, decay) {
+  // Decaying stereo noise makes a cheap, smooth room reverb
+  const n = Math.floor(c.sampleRate * seconds);
+  const buf = c.createBuffer(2, n, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay);
+  }
+  return buf;
+}
+
+function brightHz(b) { return 500 * Math.pow(32, b); }         // 500 Hz up to 16 kHz
+
+/* o: { live, sfxOnly, mix, tr, master, musicVol, sfxVol } */
+function buildGraph(c, o) {
+  const g = {};
+  g.master = c.createGain(); g.master.gain.value = o.master;
+  g.sfxBus = c.createGain(); g.sfxBus.gain.value = o.sfxVol;
+
+  if (o.live) {
+    const comp = c.createDynamicsCompressor();
+    comp.threshold.value = -16; comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.2;
+    g.analyser = c.createAnalyser(); g.analyser.fftSize = 128; g.analyser.smoothingTimeConstant = 0.75;
+    g.master.connect(comp); comp.connect(g.analyser); g.analyser.connect(c.destination);
+  } else {
+    g.master.connect(c.destination);
+  }
+  g.sfxBus.connect(g.master);
+
+  // One shared noise buffer feeds every noise-based sound
+  g.noiseBuf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+  const nd = g.noiseBuf.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+
+  if (o.sfxOnly) return g;
+
+  const mix = o.mix || DEFAULT_MIX;
+  g.musicBus = c.createGain(); g.musicBus.gain.value = o.musicVol;
+  g.musicTone = c.createBiquadFilter(); g.musicTone.type = 'lowpass'; g.musicTone.Q.value = 0.5;
+  g.musicTone.frequency.value = brightHz(mix.bright);
+  g.musicBus.connect(g.musicTone); g.musicTone.connect(g.master);
+
+  // Echo: a feedback delay whose repeats are darkened each pass
+  g.echoSend = c.createGain(); g.echoSend.gain.value = mix.echo;
+  g.delay = c.createDelay(2); g.delay.delayTime.value = o.tr ? Math.min(1.9, 60 / (o.tr.bpm * mix.tempo) * 0.75) : 0.35;
+  const fb = c.createGain(); fb.gain.value = 0.4;
+  const echoTone = c.createBiquadFilter(); echoTone.type = 'lowpass'; echoTone.frequency.value = 3200;
+  g.musicBus.connect(g.echoSend); g.echoSend.connect(g.delay); g.delay.connect(echoTone);
+  echoTone.connect(fb); fb.connect(g.delay); echoTone.connect(g.musicTone);
+
+  // Space: convolution reverb
+  const conv = c.createConvolver(); conv.buffer = makeImpulse(c, 2.2, 2.5);
+  g.revSend = c.createGain(); g.revSend.gain.value = mix.space;
+  g.musicBus.connect(g.revSend); g.revSend.connect(conv); conv.connect(g.musicTone);
+  return g;
+}
+
+function initAudio() {
+  if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  G = buildGraph(ctx, { live: true, mix: DEFAULT_MIX, master: S.master, musicVol: S.musicVol, sfxVol: S.sfxVol });
+}
+
+/* Push a track's own mix settings onto the live graph */
+function applyMix(tr) {
+  if (!G || !G.musicTone) return;
+  const m = tr.mix;
+  G.musicTone.frequency.value = brightHz(m.bright);
+  G.echoSend.gain.value = m.echo;
+  G.revSend.gain.value = m.space;
+  G.musicBus.gain.value = S.musicVol * m.vol;
+  G.delay.delayTime.value = Math.min(1.9, 60 / (tr.bpm * m.tempo) * 0.75);   // dotted eighth echo
+}
+
+/* =========================================================
+   Voice building blocks
+   ========================================================= */
+
+/* Attack, decay, sustain, hold, release on any AudioParam */
+function adsr(p, t, dur, o) {
+  const pk = o.peak ?? 0.3, a = o.a ?? 0.005, d = o.d ?? 0.08, s = o.s ?? 0.6, r = o.r ?? 0.08;
+  const sus = Math.max(pk * s, 0.0002);
+  const holdAt = Math.max(t + a + d, t + dur);
+  p.setValueAtTime(0.0001, t);
+  p.linearRampToValueAtTime(pk, t + a);
+  p.exponentialRampToValueAtTime(sus, t + a + d);
+  p.setValueAtTime(sus, holdAt);
+  p.exponentialRampToValueAtTime(0.0001, holdAt + r);
+}
+
+/* One oscillator with optional pitch slide, filter sweep, vibrato, and pan */
+function tone(dest, t, f, dur, o = {}) {
+  const osc = ctx.createOscillator();
+  osc.type = o.type || 'sine';
+  osc.frequency.setValueAtTime(f, t);
+  if (o.slideTo) osc.frequency.exponentialRampToValueAtTime(o.slideTo, t + (o.slideTime || dur));
+  if (o.detune) osc.detune.value = o.detune;
+  const end = Math.max(t + (o.a ?? 0.005) + (o.d ?? 0.08), t + dur) + (o.r ?? 0.08) + 0.05;
+
+  if (o.vib) {                       // vib = [rate Hz, depth in cents]
+    const lfo = ctx.createOscillator(), lg = ctx.createGain();
+    lfo.frequency.value = o.vib[0]; lg.gain.value = o.vib[1];
+    lfo.connect(lg); lg.connect(osc.detune);
+    lfo.start(t); lfo.stop(end);
+  }
+  let node = osc;
+  if (o.cutoff) {
+    const flt = ctx.createBiquadFilter();
+    flt.type = o.ftype || 'lowpass'; flt.Q.value = o.q ?? 0.8;
+    flt.frequency.setValueAtTime(o.cutoff, t);
+    if (o.cutoffEnd) flt.frequency.exponentialRampToValueAtTime(o.cutoffEnd, t + dur);
+    osc.connect(flt); node = flt;
+  }
+  const g = ctx.createGain();
+  adsr(g.gain, t, dur, o);
+  node.connect(g);
+  let out = g;
+  if (o.pan) { const p = ctx.createStereoPanner(); p.pan.value = o.pan; g.connect(p); out = p; }
+  out.connect(dest);
+  osc.start(t); osc.stop(end);
+}
+
+/* Filtered noise burst, used for clicks, whooshes, explosions, hats */
+function noise(dest, t, dur, o = {}) {
+  const src = ctx.createBufferSource();
+  src.buffer = G.noiseBuf; src.loop = true;
+  const flt = ctx.createBiquadFilter();
+  flt.type = o.ftype || 'bandpass'; flt.Q.value = o.q ?? 0.9;
+  flt.frequency.setValueAtTime(o.f || 2000, t);
+  if (o.fEnd) flt.frequency.exponentialRampToValueAtTime(o.fEnd, t + dur);
+  const g = ctx.createGain();
+  adsr(g.gain, t, dur, { a: 0.002, d: dur * 0.6, s: 0.15, r: 0.03, ...o });
+  src.connect(flt); flt.connect(g); g.connect(dest);
+  src.start(t, Math.random() * 1.5); src.stop(t + dur + 0.12);
+}
+
+/* A bell: a sine plus two inharmonic partials that fade faster */
+function bell(dest, t, f, dur, v = 0.1) {
+  tone(dest, t, f, dur, { type: 'sine', peak: v, a: 0.003, d: dur * 0.9, s: 0.03, r: 0.15 });
+  tone(dest, t, f * 2.756, dur * 0.5, { type: 'sine', peak: v * 0.3, a: 0.002, d: dur * 0.4, s: 0.02, r: 0.08 });
+  tone(dest, t, f * 5.4, dur * 0.25, { type: 'sine', peak: v * 0.1, a: 0.002, d: dur * 0.2, s: 0.02, r: 0.05 });
+}
+
+/* Drum kits: 'synth' for the synthwave tracks, 'chip' for the chiptune ones */
+const drums = {
+  kick(d, t, kit, v = 1) {
+    if (kit === 'chip') tone(d, t, 140, 0.14, { type: 'triangle', slideTo: 38, slideTime: 0.1, peak: 0.7 * v, a: 0.001, d: 0.1, s: 0.05, r: 0.03 });
+    else tone(d, t, 155, 0.25, { type: 'sine', slideTo: 42, slideTime: 0.13, peak: 0.85 * v, a: 0.001, d: 0.2, s: 0.05, r: 0.05 });
+  },
+  snare(d, t, kit, v = 1) {
+    if (kit === 'chip') noise(d, t, 0.1, { ftype: 'highpass', f: 2500, peak: 0.2 * v });
+    else { noise(d, t, 0.16, { f: 1800, peak: 0.3 * v }); tone(d, t, 210, 0.1, { type: 'triangle', slideTo: 130, peak: 0.18 * v, d: 0.08, s: 0.1 }); }
+  },
+  hat(d, t, kit, v = 0.7) {
+    if (kit === 'chip') noise(d, t, 0.03, { ftype: 'highpass', f: 9500, peak: 0.07 * v });
+    else noise(d, t, 0.045, { ftype: 'highpass', f: 8000, peak: 0.09 * v });
+  },
+  crash(d, t) { noise(d, t, 1.2, { ftype: 'highpass', f: 5000, peak: 0.12, s: 0.3, r: 0.5 }); }
+};
+
+/* =========================================================
+   Music: track definitions
+
+   Patterns are 16-character strings, one bar of sixteenth notes.
+     '.' rest    '-' hold the previous note
+   Bass:  r root, f fifth, o octave
+   Arp / lead: a digit picks a chord tone (0 to 7, the upper half is an octave up),
+               'a' is the ninth.
+   layers: the game tier (1 to 5) at which each part joins in.
+   intro:  an optional build-up played once before the loop. enter maps a layer to
+           the intro bar it joins on. fill adds a snare roll on the last intro bar.
+           riser adds a rising noise sweep across the whole intro.
+   ========================================================= */
+const MIN7 = [0, 3, 7, 10], MAJ7 = [0, 4, 7, 11], DOM7 = [0, 4, 7, 10], SIX = [0, 4, 7, 9];
+const MIN3 = [0, 3, 7], MAJ3 = [0, 4, 7];
+const ALL1 = { pad: 1, bass: 1, kick: 1, snare: 1, hat: 1, hatHi: 99, arp: 1, lead: 1, crash: 99 };
+
+const ATTRACT = {
+  id: 'm-attract', group: 'menu', name: 'Attract Mode', tag: 'Chiptune, bright',
+  blurb: 'Pulse-wave melody over a bouncy square bass. Feels like a cabinet in an arcade calling you over.',
+  bpm: 132, root: 60, fixed: true, kit: 'chip',
+  prog: [{ r: 0, t: MAJ3 }, { r: 7, t: MAJ3 }, { r: 9, t: MIN3 }, { r: 5, t: MAJ3 }],
+  oct: { bass: -24, arp: 12, lead: 24 },
+  waves: { bass: 'triangle', arp: 'square', lead: 'square' },
+  bassCut: 1800, arpVol: 0.05, leadVol: 0.085,
+  kick: 'x.....x.x...x...', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
+  bass: 'r.r.o.r.r.r.o.r.', arp: '0123210301232103',
+  lead: ['3-4-5-4-3---1---', '5-4-3-4-5---3---', '3-4-5-4-3---5---', '5-4-3-1-3---4---'],
+  layers: { ...ALL1, pad: 99 }
+};
+
+const CHIP = {
+  id: 'g-chip', group: 'game', name: 'Chip Rush', tag: 'Chiptune, fast',
+  blurb: 'Square-wave arps, a rolling octave bass, and noise drums. High energy for long runs.',
+  bpm: 144, root: 64, kit: 'chip',
+  prog: [{ r: 0, t: MIN3 }, { r: 8, t: MAJ3 }, { r: 3, t: MAJ3 }, { r: 10, t: MAJ3 }],
+  oct: { bass: -24, arp: 12, lead: 24 },
+  waves: { bass: 'triangle', arp: 'square', lead: 'square' },
+  bassCut: 1800, arpVol: 0.045, leadVol: 0.08,
+  kick: 'x...x...x...x...', snare: '....x.......x..x', hat: 'x.x.x.x.x.x.x.x.', hatHi: 'xxxxxxxxxxxxxxxx',
+  bass: 'rorororororororo', arp: '0123012301230123',
+  lead: ['5-4-5-3---4-5-3-', '5-4-3-4-5---3-4-', '3-4-5-4-3---5---', '5-4-3-1-3-4-5---'],
+  layers: { bass: 1, kick: 1, hat: 1, snare: 2, arp: 2, lead: 3, hatHi: 4, crash: 5 }
+};
+
+/* Variations share the original's chords and melody and change what the feedback asked for */
+const TRACKS = [
+  /* ---------- MENU ---------- */
+  {
+    id: 'm-idle', group: 'menu', name: 'Neon Idle', tag: 'Synthwave, calm',
+    blurb: 'Soft saw pads, a slow arpeggio, and a sleepy pulse. Closest to a modern arcade lobby.',
+    bpm: 96, root: 57, fixed: true, kit: 'synth',
+    prog: [{ r: 0, t: MIN7 }, { r: 8, t: MAJ7 }, { r: 3, t: MAJ7 }, { r: 10, t: SIX }],
+    oct: { pad: 0, bass: -24, arp: 12, lead: 12 },
+    waves: { pad: 'sawtooth', bass: 'sawtooth', arp: 'triangle', lead: 'sine' },
+    padCut: 900, bassCut: 420, arpVol: 0.09, leadVol: 0.1,
+    kick: 'x.......x.......', hat: '..x...x...x...x.',
+    bass: 'r-------r---f---', arp: '0.1.2.3.4.3.2.1.',
+    lead: ['4-------6---5---', '5-------7---6---', '6-------5---4---', '7---6---5-------'],
+    layers: ALL1
+  },
+  ATTRACT,
+  { ...ATTRACT, id: 'm-attract-a', name: 'Attract Mode', v: 'A', label: 'Layer by layer',
+    blurb: 'Same tune, but it starts with bass and arpeggio alone. Kick and hats join on bar 2, snare on bar 3, the lead on bar 4 with a snare roll, then the full loop lands with a crash.',
+    intro: { bars: 4, enter: { bass: 0, arp: 0, kick: 1, hat: 1, snare: 2, lead: 3 }, fill: true } },
+  { ...ATTRACT, id: 'm-attract-b', name: 'Attract Mode', v: 'B', label: 'Riser build',
+    blurb: 'A filtered noise riser sweeps upward across four bars over a quiet bass and arpeggio. Drums arrive late, the snare rolls, and the loop drops in with a crash.',
+    intro: { bars: 4, enter: { bass: 0, arp: 0, kick: 2, hat: 3 }, fill: true, riser: true } },
+  { ...ATTRACT, id: 'm-attract-c', name: 'Attract Mode', v: 'C', label: 'Melody first',
+    blurb: 'The tune starts alone over the bass so you hear the hook first. The arpeggio joins on bar 2, then kick and hats, then the snare and a roll into the full loop.',
+    intro: { bars: 4, enter: { lead: 0, bass: 0, arp: 1, kick: 2, hat: 2, snare: 3 }, fill: true } },
+  {
+    id: 'm-orbit', group: 'menu', name: 'Orbit', tag: 'Ambient, spacious',
+    blurb: 'Sine pads and slow bell tones with lots of echo. No drums at all, so it never competes with the game.',
+    bpm: 72, root: 62, fixed: true, kit: 'synth',
+    prog: [{ r: 0, t: MIN7 }, { r: 8, t: MAJ7 }, { r: 3, t: MAJ7 }, { r: 7, t: DOM7 }],
+    oct: { pad: 0, bass: -24, arp: 24 },
+    waves: { pad: 'sine', bass: 'sine', arp: 'sine' },
+    padCut: 1400, bassCut: 300, arpVol: 0.075, arpLen: 4,
+    bass: 'r---------------',
+    arp: ['4.....6.....3...', '5.....7...4.....', '6...4.....7.....', '5.....4.....6...'],
+    layers: { ...ALL1, kick: 99, snare: 99, hat: 99, lead: 99 }
+  },
+
+  /* ---------- GAME ---------- */
+  {
+    id: 'g-round', group: 'game', name: 'Round Loop', tag: 'Synthwave, driving',
+    blurb: 'Tier 1 is pads and bass. Kick, arpeggio, snare, lead, and fast hats join as rounds climb.',
+    bpm: 118, root: 57, kit: 'synth',
+    prog: [{ r: 0, t: MIN7 }, { r: 8, t: MAJ7 }, { r: 3, t: MAJ7 }, { r: 10, t: SIX }],
+    oct: { pad: 0, bass: -24, arp: 12, lead: 12 },
+    waves: { pad: 'sawtooth', bass: 'sawtooth', arp: 'square', lead: 'sawtooth' },
+    padCut: 800, bassCut: 520, arpVol: 0.06, leadVol: 0.075,
+    kick: 'x...x...x...x...', snare: '....x.......x...', hat: '..x...x...x...x.', hatHi: 'xxxxxxxxxxxxxxxx',
+    bass: 'r.rr.rr.r.rr.rr.', arp: '0246642002466420',
+    lead: ['4---6-5-4---3-2-', '5---7-6-5---4-6-', '6---5-4-6---7---', '7---6-5-4---5-6-'],
+    layers: { pad: 1, bass: 1, hat: 1, kick: 2, arp: 3, snare: 4, lead: 4, hatHi: 5, crash: 5 }
+  },
+  CHIP,
+  { ...CHIP, id: 'g-chip-a', name: 'Chip Rush', v: 'A', label: 'Lower and steadier',
+    blurb: 'Same tune and beat, but the whole thing drops an octave and slows from 144 to 126 BPM. The lead no longer sits in the piercing range.',
+    bpm: 126, root: 52, oct: { bass: -12, arp: 12, lead: 24 } },
+  { ...CHIP, id: 'g-chip-b', name: 'Chip Rush', v: 'B', label: 'Punchy beat',
+    blurb: '122 BPM with a bigger drum pattern: a syncopated double kick, driving bass, and a triangle lead that is rounder than the square. Lower register, more weight.',
+    bpm: 122, root: 52, oct: { bass: -12, arp: 12, lead: 24 },
+    waves: { bass: 'triangle', arp: 'square', lead: 'triangle' }, leadVol: 0.12,
+    kick: 'x..xx...x..xx...', snare: '....x.......x...', bass: 'r.rr.rr.r.rr.rr.' },
+  { ...CHIP, id: 'g-chip-c', name: 'Chip Rush', v: 'C', label: 'Warm rush',
+    blurb: '128 BPM with a low saw pad from tier 2, a quieter arpeggio, and an offbeat hat groove. The energy stays up, and the top end is softer.',
+    bpm: 128, root: 52, oct: { pad: 0, bass: -12, arp: 12, lead: 24 },
+    waves: { pad: 'sawtooth', bass: 'triangle', arp: 'square', lead: 'triangle' },
+    padCut: 700, arpVol: 0.03, leadVol: 0.11,
+    hat: 'x.x.x.x.x.x.x.x.', hatHi: 'x.x.x.x.x.x.xxxx',
+    layers: { pad: 2, bass: 1, kick: 1, hat: 1, snare: 2, arp: 2, lead: 3, hatHi: 4, crash: 5 } },
+  {
+    id: 'g-deep', group: 'game', name: 'Deep Space', tag: 'Minimal, dark',
+    blurb: 'A pulsing saw bass, a heavy pad, and sparse plucks. The calmest of the three, good if the game stays tense without needing energy.',
+    bpm: 104, root: 54, kit: 'synth',
+    prog: [{ r: 0, t: MIN7 }, { r: 0, t: MIN7 }, { r: 8, t: MAJ7 }, { r: 10, t: SIX }],
+    oct: { pad: 0, bass: -24, arp: 24, lead: 12 },
+    waves: { pad: 'sawtooth', bass: 'sawtooth', arp: 'square', lead: 'triangle' },
+    padCut: 520, bassCut: 380, arpVol: 0.05, leadVol: 0.1,
+    kick: 'x...x...x...x...', snare: '....x.......x...', hat: '..x...x...x...x.', hatHi: 'x.xxx.xxx.xxx.xx',
+    bass: 'r..r..r.r..r..r.', arp: '0...2...4...2...',
+    lead: ['7-----5-----4---', '7-----5---------', 'a-----7-----6---', '7-----6-----4---'],
+    layers: { pad: 1, bass: 1, kick: 2, hat: 2, arp: 3, snare: 4, lead: 4, hatHi: 5, crash: 99 }
+  }
+];
+const TRACK = Object.fromEntries(TRACKS.map(t => [t.id, t]));
+
+/* Which cards sit together. A family with more than one entry gets a full width block. */
+const MENU_FAMS = [['m-idle'], ['m-attract', 'm-attract-a', 'm-attract-b', 'm-attract-c'], ['m-orbit']];
+const GAME_FAMS = [['g-round'], ['g-chip', 'g-chip-a', 'g-chip-b', 'g-chip-c'], ['g-deep']];
+
+/* =========================================================
+   Music: sequencer
+   A short timer schedules notes slightly ahead of the audio clock,
+   which keeps timing tight even when the page is busy.
+   ========================================================= */
+const M = { track: null, step: 0, next: 0, timer: null, gain: null, vis: [], lastStep: -1 };
+
+let tierOv = null;                                               // export forces a tier through this
+const tier = () => tierOv ?? Math.min(5, 1 + Math.floor((S.round - 1) / 10));   // 10 rounds per tier
+const stepDur = (tr, danger = S.danger) => 60 / (tr.bpm * tr.mix.tempo * (danger ? 1.07 : 1)) / 4;   // one sixteenth, in seconds
+const introSteps = tr => tr.intro ? tr.intro.bars * 16 : 0;
+
+function noteAt(str, i) {
+  const c = str[i];
+  if (!c || c === '.' || c === '-') return null;
+  let len = 1;
+  while (str[i + len] === '-') len++;
+  return { c, len };
+}
+
+/* Chord tone by index: 0 to n-1 is the chord, then the same tones an octave up. 'a' is the ninth. */
+function chordTone(ch, c) {
+  if (c === 'a') return ch.t[0] + 14;
+  const i = +c, n = ch.t.length;
+  return ch.t[i % n] + 12 * Math.floor(i / n);
+}
+
+function scheduleStep(tr, step, t, dest) {
+  const s = step % 16, absBar = Math.floor(step / 16), bar = absBar % tr.prog.length;
+  const isIntro = step < introSteps(tr);
+  const filling = isIntro && tr.intro.fill && absBar === tr.intro.bars - 1;
+  const lv = tr.fixed ? 5 : tier();
+  // During an intro, layers follow the intro's own entry bars. After it, normal rules apply.
+  const on = k => isIntro ? (tr.intro.enter[k] !== undefined && absBar >= tr.intro.enter[k]) : (tr.layers[k] !== undefined && lv >= tr.layers[k]);
+  const pick = p => Array.isArray(p) ? p[bar % p.length] : p;
+  const ch = tr.prog[bar];
+  const base = tr.root + tr.mix.key + ch.r;
+  const sd = stepDur(tr);
+
+  // Percussion
+  if (tr.intro && step === introSteps(tr)) drums.crash(dest, t);        // the drop after a build-up
+  if (!tr.intro && s === 0 && bar === 0 && on('crash')) drums.crash(dest, t);
+  if (tr.intro && !isIntro && s === 0 && bar === 0 && on('crash')) drums.crash(dest, t);
+  if (tr.kick && on('kick') && pick(tr.kick)[s] === 'x') drums.kick(dest, t, tr.kit);
+  if (tr.snare && on('snare') && !filling && pick(tr.snare)[s] === 'x') drums.snare(dest, t, tr.kit);
+  if (filling && s >= 8 && (s >= 12 || s % 2 === 0)) drums.snare(dest, t, tr.kit, 0.5 + (s - 8) * 0.08);   // rising roll
+  const hatStr = (tr.hatHi && on('hatHi')) ? tr.hatHi : tr.hat;
+  if (hatStr && on('hat') && hatStr[s] === 'x') drums.hat(dest, t, tr.kit, s % 4 === 2 ? 1 : 0.6);
+
+  // Riser: one long filtered noise sweep across the whole intro
+  if (isIntro && tr.intro.riser && step === 0) {
+    const dur = introSteps(tr) * sd;
+    noise(dest, t, dur, { ftype: 'bandpass', f: 300, fEnd: 9000, q: 1.6, peak: 0.13, a: dur * 0.92, d: dur * 0.05, s: 1, r: 0.05 });
+  }
+
+  // Pad: the whole chord, once per bar, with a slow swell
+  if (tr.oct.pad !== undefined && tr.waves.pad && s === 0 && on('pad')) {
+    ch.t.forEach(semi => [-7, 7].forEach(det => tone(dest, t, hz(base + tr.oct.pad + semi), 16 * sd, {
+      type: tr.waves.pad, detune: det, cutoff: tr.padCut, peak: 0.032, a: 0.5, d: 0.4, s: 0.85, r: 0.8
+    })));
+  }
+
+  // Bass
+  if (tr.bass && on('bass')) {
+    const n = noteAt(pick(tr.bass), s);
+    if (n) tone(dest, t, hz(base + tr.oct.bass + { r: 0, f: 7, o: 12 }[n.c]), n.len * sd * 0.92, {
+      type: tr.waves.bass, cutoff: tr.bassCut, cutoffEnd: tr.bassCut * 0.4, peak: 0.26, a: 0.005, d: 0.08, s: 0.7, r: 0.05
+    });
+  }
+
+  // Arpeggio: short plucks, alternating left and right
+  if (tr.arp && on('arp')) {
+    const n = noteAt(pick(tr.arp), s);
+    if (n) tone(dest, t, hz(base + tr.oct.arp + chordTone(ch, n.c)), sd * (tr.arpLen || 0.9), {
+      type: tr.waves.arp, cutoff: 3200, cutoffEnd: 700, peak: tr.arpVol, a: 0.003, d: 0.12, s: 0.3, r: 0.1, pan: s % 8 < 4 ? -0.3 : 0.3
+    });
+  }
+
+  // Lead melody
+  if (tr.lead && on('lead')) {
+    const n = noteAt(tr.lead[bar % tr.lead.length], s);
+    if (n) tone(dest, t, hz(base + tr.oct.lead + chordTone(ch, n.c)), n.len * sd * 0.95, {
+      type: tr.waves.lead, peak: tr.leadVol, a: 0.01, d: 0.1, s: 0.7, r: 0.12, vib: [5.5, 8]
+    });
+  }
+
+  // Danger layer: a dissonant drone under the bar and a heartbeat
+  if (S.danger) {
+    if (s === 0) tone(dest, t, hz(base - 12 + 6), 16 * sd, { type: 'sawtooth', cutoff: 380, peak: 0.05, a: 0.6, d: 1, s: 0.8, r: 0.5 });
+    if (s === 0 || s === 3) drums.kick(dest, t, 'synth', 0.55);
+  }
+}
+
+function tick() {
+  const tr = M.track;
+  if (!tr) return;
+  while (M.next < ctx.currentTime + 0.15) {
+    scheduleStep(tr, M.step, M.next, M.gain);
+    M.vis.push([M.next, M.step]);
+    M.next += stepDur(tr);
+    M.step++;
+    // After an intro, keep the step counter in range so bar math stays exact on long sessions
+  }
+}
+
+function playTrack(tr) {
+  initAudio();
+  if (M.track) stopTrack();
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0, ctx.currentTime);
+  g.gain.linearRampToValueAtTime(1, ctx.currentTime + 0.4);
+  g.connect(G.musicBus);
+  Object.assign(M, { track: tr, gain: g, step: 0, next: ctx.currentTime + 0.12, vis: [], lastStep: -1 });
+  applyMix(tr);
+  M.timer = setInterval(tick, 25);
+  $('#nowTitle').textContent = trackTitle(tr);
+  refreshButtons(); updateTierLine();
+}
+
+function stopTrack() {
+  if (!M.track) return;
+  clearInterval(M.timer);
+  const g = M.gain, now = ctx.currentTime;
+  g.gain.cancelScheduledValues(now);
+  g.gain.setValueAtTime(g.gain.value, now);
+  g.gain.linearRampToValueAtTime(0, now + 0.5);
+  setTimeout(() => g.disconnect(), 2500);
+  M.track = null;
+  $('#nowTitle').textContent = 'Nothing playing';
+  refreshButtons();
+}
+
+const trackTitle = tr => tr.name + (tr.v ? ' ' + tr.v + ': ' + tr.label : '') + '  (' + tr.tag + ')';
+
+/* =========================================================
+   Sound effects
+   fn(t, p, n): t is start time, p a small random pitch factor, n an optional streak index.
+   Every fn writes to the SFX bus of whichever graph is active, so the same code
+   plays live and renders offline.
+   ========================================================= */
+const B = () => G.sfxBus;
+const PENT = [0, 2, 4, 7, 9];                                    // major pentatonic
+const hitHz = n => 392 * Math.pow(2, (PENT[n % 5] + 12 * Math.floor(n / 5)) / 12);
+const jitter = (amt) => 1 + (Math.random() - 0.5) * amt;
+
+/* ----- balls ----- */
+function launch(t, p) {
+  tone(B(), t, 260 * p, 0.12, { type: 'sine', slideTo: 900 * p, peak: 0.22, a: 0.002, d: 0.1, s: 0.1, r: 0.03 });
+  noise(B(), t, 0.08, { f: 2200, peak: 0.05 });
+}
+const launchA = (t, p) => {
+  tone(B(), t, 420 * p, 0.06, { type: 'sine', slideTo: 150 * p, peak: 0.2, a: 0.001, d: 0.05, s: 0.1, r: 0.02 });
+  noise(B(), t, 0.015, { f: 1500, peak: 0.05 });
+};
+const launchB = (t, p) => {
+  tone(B(), t, 500 * p, 0.07, { type: 'triangle', slideTo: 1500 * p, peak: 0.14, a: 0.002, d: 0.05, s: 0.1, r: 0.02 });
+  noise(B(), t, 0.06, { f: 3000, fEnd: 6000, peak: 0.05, q: 1.5 });
+};
+const launchC = (t, p) => {
+  tone(B(), t, 280 * p, 0.09, { type: 'sine', slideTo: 700 * p, peak: 0.16, vib: [30, 60], a: 0.003, d: 0.07, s: 0.1, r: 0.03 });
+};
+const volley = fn => (t, p) => { for (let i = 0; i < 8; i++) fn(t + i * 0.12, p * jitter(0.05)); };
+
+function wall(t, p) {
+  tone(B(), t, 240 * p, 0.07, { type: 'triangle', slideTo: 170 * p, peak: 0.28, a: 0.001, d: 0.05, s: 0.1, r: 0.03 });
+  noise(B(), t, 0.02, { f: 900, peak: 0.1 });
+}
+/* Stress test for the "lots of balls" case: 40 bounces at random times over 2.5 seconds */
+const wallStress = (t, p) => { for (let i = 0; i < 40; i++) wall(t + Math.random() * 2.5, p * jitter(0.2)); };
+
+/* ----- block hits: n is the streak index, which walks up the pentatonic scale ----- */
+function hit(t, p, n = 2) {
+  const f = hitHz(n) * p;
+  tone(B(), t, f, 0.1, { type: 'square', peak: 0.14, a: 0.001, d: 0.06, s: 0.2, r: 0.04, cutoff: 5000 });
+  tone(B(), t, f / 2, 0.12, { type: 'triangle', peak: 0.16, a: 0.001, d: 0.08, s: 0.1, r: 0.04 });
+  noise(B(), t, 0.02, { ftype: 'highpass', f: 5000, peak: 0.06 });
+}
+function hitMarimba(t, p, n = 2) {
+  const f = hitHz(n) * p;
+  tone(B(), t, f, 0.22, { type: 'sine', peak: 0.2, a: 0.001, d: 0.18, s: 0.02, r: 0.05 });
+  tone(B(), t, f * 4, 0.06, { type: 'sine', peak: 0.08, a: 0.001, d: 0.04, s: 0.02, r: 0.02 });
+  noise(B(), t, 0.008, { f: 3000, peak: 0.05 });
+}
+function hitGlass(t, p, n = 2) {
+  const f = hitHz(n) * 2 * p;
+  tone(B(), t, f, 0.16, { type: 'sine', peak: 0.11, a: 0.001, d: 0.14, s: 0.02, r: 0.05 });
+  tone(B(), t, f * 2.76, 0.08, { type: 'sine', peak: 0.05, a: 0.001, d: 0.06, s: 0.02, r: 0.02 });
+}
+function hitChip(t, p, n = 2) {
+  const f = hitHz(n) * p;
+  tone(B(), t, f, 0.07, { type: 'square', slideTo: f * 1.06, peak: 0.1, a: 0.001, d: 0.05, s: 0.3, r: 0.02, cutoff: 6000 });
+}
+const streak = fn => (t, p) => { for (let i = 0; i < 12; i++) fn(t + i * 0.075, p, i); };
+
+/* ----- everything else, one small function per sound ----- */
+const clickO = (t, p) => {
+  tone(B(), t, 1500 * p, 0.05, { type: 'square', slideTo: 900 * p, peak: 0.11, a: 0.001, d: 0.03, s: 0.3, r: 0.02 });
+  noise(B(), t, 0.015, { ftype: 'highpass', f: 4000, peak: 0.05 });
+};
+const clickA = (t, p) => {
+  tone(B(), t, 1800 * p, 0.03, { type: 'sine', slideTo: 1200 * p, peak: 0.07, a: 0.001, d: 0.02, s: 0.2, r: 0.01 });
+  noise(B(), t, 0.01, { ftype: 'highpass', f: 6000, peak: 0.03 });
+};
+const clickB = (t, p) => {
+  tone(B(), t, 700 * p, 0.05, { type: 'triangle', slideTo: 350 * p, peak: 0.1, a: 0.001, d: 0.035, s: 0.1, r: 0.015 });
+  noise(B(), t, 0.012, { f: 2500, peak: 0.05 });
+};
+const clickC = (t, p) => {
+  tone(B(), t, 1000 * p, 0.03, { type: 'square', peak: 0.06, a: 0.001, r: 0.01, cutoff: 4000 });
+  tone(B(), t + 0.035, 1400 * p, 0.04, { type: 'square', peak: 0.06, a: 0.001, r: 0.015, cutoff: 4000 });
+};
+
+const offO = (t, p) => {
+  tone(B(), t, 990 * p, 0.06, { type: 'square', peak: 0.1, r: 0.02 });
+  tone(B(), t + 0.06, 620 * p, 0.1, { type: 'square', peak: 0.1, r: 0.05 });
+};
+const offA = (t, p) => tone(B(), t, 520 * p, 0.09, { type: 'triangle', slideTo: 260 * p, peak: 0.14, d: 0.07, s: 0.1, r: 0.03 });
+const offB = (t, p) => tone(B(), t, 900 * p, 0.14, { type: 'sawtooth', slideTo: 300 * p, peak: 0.08, cutoff: 2500, cutoffEnd: 400, d: 0.1, s: 0.1, r: 0.03 });
+const offC = (t, p) => {
+  tone(B(), t, 220 * p, 0.06, { type: 'sine', slideTo: 160 * p, peak: 0.22, d: 0.05, s: 0.1, r: 0.02 });
+  noise(B(), t, 0.02, { ftype: 'lowpass', f: 1200, peak: 0.1 });
+};
+
+const landO = (t, p) => tone(B(), t, 500 * p, 0.08, { type: 'sine', slideTo: 300 * p, peak: 0.1, a: 0.002, d: 0.06, s: 0.1, r: 0.03 });
+const landA = (t, p) => tone(B(), t, 700 * p, 0.1, { type: 'sine', slideTo: 350 * p, peak: 0.09, a: 0.002, d: 0.08, s: 0.05, r: 0.04 });
+const landB = (t, p) => {
+  tone(B(), t, 180 * p, 0.08, { type: 'sine', slideTo: 100 * p, peak: 0.2, d: 0.06, s: 0.05, r: 0.03 });
+  noise(B(), t, 0.02, { ftype: 'lowpass', f: 900, peak: 0.06 });
+};
+const landC = (t, p) => {
+  tone(B(), t, 1000 * p, 0.15, { type: 'sine', peak: 0.07, d: 0.12, s: 0.02, r: 0.05 });
+  tone(B(), t, 2756 * p, 0.06, { type: 'sine', peak: 0.02, d: 0.05, s: 0.02 });
+};
+
+const pickO = (t, p) => {
+  [659, 831, 988, 1319].forEach((f, i) => {
+    tone(B(), t + i * 0.05, f * p, 0.12, { type: 'sine', peak: 0.16, a: 0.002, d: 0.08, s: 0.3, r: 0.1 });
+    tone(B(), t + i * 0.05, f * 2 * p, 0.08, { type: 'triangle', peak: 0.04, r: 0.06 });
+  });
+  noise(B(), t + 0.1, 0.18, { ftype: 'highpass', f: 9000, peak: 0.04 });
+};
+const pickA = (t, p) => {
+  tone(B(), t, 988 * p, 0.07, { type: 'square', peak: 0.09, cutoff: 5000, r: 0.02 });
+  tone(B(), t + 0.07, 1319 * p, 0.3, { type: 'square', peak: 0.09, cutoff: 5000, d: 0.25, s: 0.2, r: 0.1 });
+};
+const pickB = (t, p) => {
+  [784, 988, 1175, 1568, 1976].forEach((f, i) => tone(B(), t + i * 0.045, f * p, 0.15, { type: 'sine', peak: 0.11, d: 0.12, s: 0.1, r: 0.1 }));
+  tone(B(), t + 0.2, 3136 * p, 0.2, { type: 'sine', peak: 0.03, d: 0.15, s: 0.05, r: 0.1 });
+};
+const pickC = (t, p) => {
+  [523, 659, 784].forEach(f => {
+    tone(B(), t, f * p, 0.5, { type: 'sine', slideTo: f * p * 1.03, peak: 0.1, d: 0.4, s: 0.05, r: 0.15 });
+    tone(B(), t, f * 2.756 * p, 0.2, { type: 'sine', peak: 0.025, d: 0.15, s: 0.02 });
+  });
+  tone(B(), t + 0.08, 1047 * p, 0.4, { type: 'sine', peak: 0.09, d: 0.3, s: 0.05, r: 0.15 });
+};
+
+const breakSO = (t, p) => {
+  noise(B(), t, 0.12, { f: 1400, fEnd: 300, peak: 0.24 });
+  tone(B(), t, 300 * p, 0.12, { type: 'triangle', slideTo: 90 * p, peak: 0.25, a: 0.001, d: 0.1, s: 0.05, r: 0.03 });
+};
+const breakSA = (t, p) => {
+  tone(B(), t, 500 * p, 0.06, { type: 'sine', slideTo: 100 * p, peak: 0.3, a: 0.001, d: 0.05, s: 0.05, r: 0.02 });
+  noise(B(), t, 0.02, { ftype: 'highpass', f: 4000, peak: 0.12 });
+};
+const breakSB = (t, p) => {
+  noise(B(), t, 0.1, { f: 2000, fEnd: 500, peak: 0.24, q: 0.7 });
+  tone(B(), t, 250 * p, 0.1, { type: 'sawtooth', slideTo: 80 * p, peak: 0.12, cutoff: 1500, d: 0.08, s: 0.05 });
+};
+const breakSC = (t, p) => {
+  noise(B(), t, 0.14, { ftype: 'highpass', f: 3000, fEnd: 1000, peak: 0.16 });
+  [2400, 1900, 1500].forEach((f, i) => tone(B(), t + 0.02 + i * 0.035, f * p, 0.06, { type: 'sine', slideTo: f * 0.7 * p, peak: 0.07, d: 0.05, s: 0.05, r: 0.02 }));
+};
+
+const breakLO = (t, p) => {
+  noise(B(), t, 0.35, { ftype: 'lowpass', f: 3000, fEnd: 200, peak: 0.4, q: 0.5 });
+  tone(B(), t, 140 * p, 0.3, { type: 'sine', slideTo: 40, peak: 0.5, a: 0.001, d: 0.25, s: 0.05, r: 0.05 });
+  tone(B(), t, 220 * p, 0.2, { type: 'sawtooth', slideTo: 60, peak: 0.09, cutoff: 1500, d: 0.15, s: 0.05 });
+};
+const breakLA = (t, p) => {
+  tone(B(), t, 110 * p, 0.4, { type: 'sine', slideTo: 32, peak: 0.6, a: 0.001, d: 0.35, s: 0.05, r: 0.05 });
+  noise(B(), t, 0.3, { ftype: 'lowpass', f: 2000, fEnd: 150, peak: 0.35, q: 0.5 });
+};
+const breakLB = (t, p) => {
+  noise(B(), t, 0.5, { ftype: 'highpass', f: 4000, fEnd: 1500, peak: 0.2, s: 0.2, r: 0.15 });
+  [3000, 2400, 2000, 1700, 1400, 1100].forEach((f, i) => tone(B(), t + 0.02 + i * 0.045, f * p, 0.09, { type: 'sine', slideTo: f * 0.6 * p, peak: 0.07, d: 0.07, s: 0.05, r: 0.03 }));
+  tone(B(), t, 130 * p, 0.25, { type: 'sine', slideTo: 45, peak: 0.45, d: 0.2, s: 0.05 });
+};
+const breakLC = (t, p) => {
+  tone(B(), t, 80 * p, 0.1, { type: 'sawtooth', slideTo: 400 * p, peak: 0.1, cutoff: 1500, d: 0.08, s: 0.2 });
+  tone(B(), t + 0.08, 180 * p, 0.3, { type: 'sine', slideTo: 40, peak: 0.5, d: 0.25, s: 0.05 });
+  noise(B(), t + 0.08, 0.3, { ftype: 'lowpass', f: 4000, fEnd: 300, peak: 0.3, q: 0.5 });
+};
+
+const shiftO = (t, p) => {
+  noise(B(), t, 0.25, { f: 300, fEnd: 1200, peak: 0.12, q: 0.6 });
+  tone(B(), t + 0.2, 90 * p, 0.15, { type: 'sine', slideTo: 60, peak: 0.4, d: 0.12, s: 0.1 });
+  tone(B(), t + 0.22, 784 * p, 0.2, { type: 'triangle', peak: 0.08, d: 0.15, s: 0.1, r: 0.15 });
+};
+const shiftA = (t, p) => [0, 0.12].forEach(o => {
+  tone(B(), t + o, 100 * p, 0.1, { type: 'sine', slideTo: 55, peak: 0.4, d: 0.08, s: 0.05 });
+  noise(B(), t + o, 0.02, { f: 3000, peak: 0.1 });
+});
+const shiftB = (t, p) => {
+  noise(B(), t, 0.3, { f: 1500, fEnd: 250, peak: 0.12, q: 0.6, a: 0.03, d: 0.25, s: 0.4 });
+  tone(B(), t, 784 * p, 0.25, { type: 'triangle', slideTo: 523 * p, peak: 0.06, d: 0.2, s: 0.1, r: 0.1 });
+  tone(B(), t + 0.22, 90 * p, 0.14, { type: 'sine', slideTo: 55, peak: 0.35, d: 0.1, s: 0.05 });
+};
+const shiftC = (t, p) => {
+  [600, 500, 400].forEach((f, i) => tone(B(), t + i * 0.05, f * p, 0.04, { type: 'triangle', peak: 0.13, d: 0.03, s: 0.1, r: 0.015 }));
+  tone(B(), t + 0.17, 90 * p, 0.13, { type: 'sine', slideTo: 55, peak: 0.38, d: 0.1, s: 0.05 });
+};
+
+const dangerO = (t, p) => [0, 0.32].forEach(o => {
+  tone(B(), t + o, 620 * p, 0.12, { type: 'square', peak: 0.1, r: 0.03 });
+  tone(B(), t + o + 0.15, 480 * p, 0.12, { type: 'square', peak: 0.1, r: 0.03 });
+});
+const dangerA = (t, p) => [0, 0.35].forEach(o => [-8, 8].forEach(det =>
+  tone(B(), t + o, 230 * p, 0.25, { type: 'sawtooth', slideTo: 190 * p, detune: det, peak: 0.06, cutoff: 1200, d: 0.2, s: 0.5, r: 0.08 })));
+const dangerB = (t, p) => [[0, 1], [0.5, 0.5], [0.9, 0.25]].forEach(([o, v]) =>
+  tone(B(), t + o, 880 * p, 0.5, { type: 'sine', peak: 0.14 * v, a: 0.003, d: 0.45, s: 0.02, r: 0.1 }));
+const dangerC = (t, p) => [0, 0.16, 0.7, 0.86].forEach((o, i) =>
+  tone(B(), t + o, (i % 2 ? 85 : 100) * p, 0.12, { type: 'sine', slideTo: 45, peak: i % 2 ? 0.3 : 0.4, d: 0.1, s: 0.05 }));
+
+const stingerO = (t, p) => {
+  [523, 659, 784, 1047, 1319].forEach((f, i) => {
+    tone(B(), t + i * 0.07, f * p, 0.16, { type: 'square', peak: 0.1, cutoff: 5000, r: 0.05 });
+    tone(B(), t + i * 0.07, f * p, 0.16, { type: 'triangle', peak: 0.12, r: 0.05 });
+  });
+  [1047, 1319, 1568].forEach(f => tone(B(), t + 0.4, f * p, 0.6, { type: 'sine', peak: 0.1, a: 0.01, d: 0.3, s: 0.4, r: 0.35 }));
+  noise(B(), t + 0.4, 0.4, { ftype: 'highpass', f: 8000, peak: 0.05 });
+};
+/* A: same arpeggio, chord fades out smoothly with no noise at all */
+const stingerA = (t, p) => {
+  [523, 659, 784, 1047, 1319].forEach((f, i) => {
+    tone(B(), t + i * 0.07, f * p, 0.16, { type: 'square', peak: 0.1, cutoff: 5000, r: 0.05 });
+    tone(B(), t + i * 0.07, f * p, 0.16, { type: 'triangle', peak: 0.12, r: 0.05 });
+  });
+  [1047, 1319, 1568].forEach(f => {
+    tone(B(), t + 0.4, f * p, 0.9, { type: 'triangle', peak: 0.08, a: 0.01, d: 0.6, s: 0.15, r: 0.4 });
+    tone(B(), t + 0.4, f * p, 0.9, { type: 'sine', peak: 0.06, a: 0.01, d: 0.6, s: 0.15, r: 0.4 });
+  });
+};
+/* B: the fanfare played on bells, ending in a shimmering bell chord */
+const stingerB = (t, p) => {
+  [523, 659, 784, 1047, 1319].forEach((f, i) => bell(B(), t + i * 0.08, f * p, 0.5, 0.1));
+  [1047, 1319, 1568].forEach(f => bell(B(), t + 0.42, f * p, 1.1, 0.09));
+};
+/* C: punchy saw brass, a quick rising line and a chord stab */
+const stingerC = (t, p) => {
+  [392, 494, 587, 784].forEach((f, i) => tone(B(), t + i * 0.06, f * p, 0.22, { type: 'sawtooth', peak: 0.07, cutoff: 1800, cutoffEnd: 600, d: 0.15, s: 0.4, r: 0.1 }));
+  [523, 659, 784, 1047].forEach(f => tone(B(), t + 0.3, f * p, 0.6, { type: 'sawtooth', peak: 0.055, cutoff: 2500, cutoffEnd: 500, d: 0.5, s: 0.2, r: 0.3 }));
+  tone(B(), t + 0.3, 131 * p, 0.5, { type: 'sine', peak: 0.25, d: 0.4, s: 0.2, r: 0.1 });
+};
+
+const clearO = (t, p) => {
+  tone(B(), t, 200, 0.5, { type: 'sawtooth', slideTo: 1600, peak: 0.1, cutoff: 800, cutoffEnd: 6000, a: 0.02, d: 0.4, s: 0.8, r: 0.05 });
+  [523, 659, 784, 1047].forEach(f => tone(B(), t + 0.5, f * p, 1.0, { type: 'triangle', peak: 0.12, a: 0.01, d: 0.4, s: 0.4, r: 0.5 }));
+  [0, 2, 4, 7, 9, 12, 14, 16].forEach((semi, i) => tone(B(), t + 0.55 + i * 0.055, 1047 * Math.pow(2, semi / 12), 0.2, { type: 'sine', peak: 0.06, r: 0.15 }));
+  noise(B(), t + 0.5, 0.8, { ftype: 'highpass', f: 6000, peak: 0.06, s: 0.3, r: 0.3 });
+};
+/* A: a smooth upward sweep into a big chord, no noise */
+const clearA = (t, p) => {
+  tone(B(), t, 220, 0.45, { type: 'sine', slideTo: 1760, peak: 0.16, a: 0.02, d: 0.4, s: 0.8, r: 0.05 });
+  tone(B(), t, 220, 0.45, { type: 'sawtooth', slideTo: 1760, peak: 0.04, cutoff: 3000, a: 0.02, d: 0.4, s: 0.8, r: 0.05 });
+  [523, 659, 784, 1047, 1319].forEach(f => {
+    tone(B(), t + 0.45, f * p, 1.3, { type: 'triangle', peak: 0.09, a: 0.01, d: 0.7, s: 0.25, r: 0.5 });
+    tone(B(), t + 0.45, f * p, 1.3, { type: 'sine', peak: 0.05, a: 0.01, d: 0.7, s: 0.25, r: 0.5 });
+  });
+  [0, 4, 7, 12, 16, 19].forEach((semi, i) => tone(B(), t + 0.5 + i * 0.07, 1047 * Math.pow(2, semi / 12), 0.35, { type: 'sine', peak: 0.05, d: 0.3, s: 0.05, r: 0.15 }));
+};
+/* B: a fast pentatonic cascade across three octaves, landing on a bell chord */
+const clearB = (t, p) => {
+  for (let i = 0; i < 18; i++) {
+    const semi = PENT[i % 5] + 12 * Math.floor(i / 5);
+    const f = 523 * Math.pow(2, semi / 12) * p;
+    tone(B(), t + i * 0.042, f, 0.16, { type: 'sine', peak: 0.1, d: 0.12, s: 0.05, r: 0.1 });
+    tone(B(), t + i * 0.042, f, 0.1, { type: 'triangle', peak: 0.05, r: 0.05 });
+  }
+  [1047, 1319, 1568, 2093].forEach(f => bell(B(), t + 0.8, f * p, 1.5, 0.09));
+};
+/* C: an 8-bit victory jingle in square waves over a triangle bass */
+const clearC = (t, p) => {
+  [523, 659, 784, 1047, 784, 1047, 1319, 1568].forEach((f, i) =>
+    tone(B(), t + i * 0.1, f * p, 0.09, { type: 'square', peak: 0.09, cutoff: 5000, a: 0.002, d: 0.06, s: 0.5, r: 0.03 }));
+  [1047, 1319, 1568].forEach(f => tone(B(), t + 0.8, f * p, 0.6, { type: 'square', peak: 0.07, cutoff: 5000, d: 0.5, s: 0.3, r: 0.2 }));
+  [131, 165, 196, 262].forEach((f, i) => tone(B(), t + i * 0.2, f * p, 0.18, { type: 'triangle', peak: 0.2, d: 0.14, s: 0.3, r: 0.04 }));
+  tone(B(), t + 0.8, 131 * p, 0.6, { type: 'triangle', peak: 0.22, d: 0.5, s: 0.3, r: 0.15 });
+};
+
+/* Sounds you marked Keep are untouched. Each family lists its tiles, original first. */
+const FAMS = [
+  /* ---- UI ---- */
+  { g: 'UI', id: 'click', name: 'Button click', when: 'Any menu button press. Variations quieter than the original, with the same snappy attack, so you can rotate them.', tiles: [
+    { v: 'orig', fn: clickO },
+    { v: 'A', label: 'Soft tick', desc: 'Sine chirp, very short and quiet.', fn: clickA },
+    { v: 'B', label: 'Wood tap', desc: 'Low triangle knock with a touch of body.', fn: clickB },
+    { v: 'C', label: 'Blip pair', desc: 'Two tiny square notes, the second higher.', fn: clickC }] },
+  { g: 'UI', id: 'hover', name: 'Button hover', when: 'Cursor over a button, quiet tick', tiles: [
+    { v: 'orig', fn: (t, p) => tone(B(), t, 1100 * p, 0.04, { type: 'triangle', peak: 0.06, a: 0.001, d: 0.02, s: 0.3, r: 0.02 }) }] },
+  { g: 'UI', id: 'on', name: 'Toggle on', when: 'Enabling a mod in the Mod Menu', tiles: [
+    { v: 'orig', fn: (t, p) => {
+      tone(B(), t, 660 * p, 0.06, { type: 'square', peak: 0.1, r: 0.02 });
+      tone(B(), t + 0.06, 990 * p, 0.1, { type: 'square', peak: 0.1, r: 0.05 }); } }] },
+  { g: 'UI', id: 'off', name: 'Toggle off', when: 'Disabling a mod. Variations avoid the up-then-down pair that mirrors Toggle on.', tiles: [
+    { v: 'orig', fn: offO },
+    { v: 'A', label: 'Down thunk', desc: 'One soft falling triangle note.', fn: offA },
+    { v: 'B', label: 'Power down', desc: 'Filtered saw sweep that closes.', fn: offB },
+    { v: 'C', label: 'Latch', desc: 'Low knock with a muted click.', fn: offC }] },
+
+  /* ---- BALLS ---- */
+  { g: 'Balls', id: 'launch', name: 'Ball launch', when: 'Each ball leaving the shooter. "Volley of 8" plays a burst.', tiles: [
+    { v: 'orig', fn: launch, alt: { label: 'Volley of 8', fn: volley(launch) } },
+    { v: 'A', label: 'Pop', desc: 'Falling sine pop, very short.', fn: launchA, alt: { label: 'Volley of 8', fn: volley(launchA) } },
+    { v: 'B', label: 'Thwip', desc: 'Rising triangle with a bright air puff.', fn: launchB, alt: { label: 'Volley of 8', fn: volley(launchB) } },
+    { v: 'C', label: 'Bloop', desc: 'Bubbly sine with fast vibrato.', fn: launchC, alt: { label: 'Volley of 8', fn: volley(launchC) } }] },
+  { g: 'Balls', id: 'wall', name: 'Wall bounce', when: 'Ball hits a side wall or the ceiling. The stress test plays 40 bounces in 2.5 seconds.', tiles: [
+    { v: 'orig', fn: wall, alt: { label: 'Stress test: 40 balls', fn: wallStress } }] },
+  { g: 'Balls', id: 'hit', name: 'Block hit', when: 'Ball damages a block. Pitch rises on a hit streak. Every version has a streak button.', tiles: [
+    { v: 'orig', fn: hit, alt: { label: 'Streak of 12', fn: streak(hit) } },
+    { v: 'A', label: 'Marimba', desc: 'Woody sine with a fast overtone.', fn: hitMarimba, alt: { label: 'Streak of 12', fn: streak(hitMarimba) } },
+    { v: 'B', label: 'Glass ping', desc: 'An octave up, bell-like and airy.', fn: hitGlass, alt: { label: 'Streak of 12', fn: streak(hitGlass) } },
+    { v: 'C', label: 'Chip blip', desc: 'Short square note that bends up.', fn: hitChip, alt: { label: 'Streak of 12', fn: streak(hitChip) } }] },
+  { g: 'Balls', id: 'land', name: 'Ball lands', when: 'A ball reaches the floor. Kept quiet since many land per round.', tiles: [
+    { v: 'orig', fn: landO },
+    { v: 'A', label: 'Drip', desc: 'Falling sine with a short tail.', fn: landA },
+    { v: 'B', label: 'Thud', desc: 'Low, soft, and dull.', fn: landB },
+    { v: 'C', label: 'Bell tap', desc: 'A tiny bell, high and clean.', fn: landC }] },
+  { g: 'Balls', id: 'pickup', name: 'Ball++ pickup', when: 'Collecting the extra ball pickup', tiles: [
+    { v: 'orig', fn: pickO },
+    { v: 'A', label: 'Coin', desc: 'Two square notes, classic arcade.', fn: pickA },
+    { v: 'B', label: 'Sparkle up', desc: 'Five fast sine notes rising, no noise.', fn: pickB },
+    { v: 'C', label: 'Power chime', desc: 'A warm major chord with bell partials.', fn: pickC }] },
+
+  /* ---- BLOCKS ---- */
+  { g: 'Blocks', id: 'breakS', name: 'Block break, small', when: 'Low value block destroyed', tiles: [
+    { v: 'orig', fn: breakSO },
+    { v: 'A', label: 'Pop', desc: 'A quick bubble pop with a click.', fn: breakSA },
+    { v: 'B', label: 'Crunch', desc: 'Noisy snap with a saw thump.', fn: breakSB },
+    { v: 'C', label: 'Shatter', desc: 'Glassy burst with falling pings.', fn: breakSC }] },
+  { g: 'Blocks', id: 'breakL', name: 'Block break, big', when: 'High value block destroyed', tiles: [
+    { v: 'orig', fn: breakLO },
+    { v: 'A', label: 'Boom', desc: 'Deeper sub drop with a soft rumble.', fn: breakLA },
+    { v: 'B', label: 'Shatter crash', desc: 'A cascade of falling glass over a thud.', fn: breakLB },
+    { v: 'C', label: 'Burst', desc: 'A quick rising zap, then the blast.', fn: breakLC }] },
+  { g: 'Blocks', id: 'shift', name: 'Rows shift down', when: 'A round ends and the grid moves', tiles: [
+    { v: 'orig', fn: shiftO },
+    { v: 'A', label: 'Clunk', desc: 'Two heavy mechanical steps.', fn: shiftA },
+    { v: 'B', label: 'Sweep down', desc: 'A downward whoosh with a falling chime.', fn: shiftB },
+    { v: 'C', label: 'Stack drop', desc: 'Three descending ticks, then a thud.', fn: shiftC }] },
+  { g: 'Blocks', id: 'danger', name: 'Danger warning', when: 'Blocks reach the bottom row', tiles: [
+    { v: 'orig', fn: dangerO },
+    { v: 'A', label: 'Low klaxon', desc: 'Two detuned saw horns, no shrill top.', fn: dangerA },
+    { v: 'B', label: 'Sonar', desc: 'A single ping with fading echoes.', fn: dangerB },
+    { v: 'C', label: 'Lub-dub', desc: 'A double heartbeat, felt more than heard.', fn: dangerC }] },
+  { g: 'Blocks', id: 'lose', name: 'Game over', when: 'Loss condition triggers', tiles: [
+    { v: 'orig', fn: (t, p) => {
+      [392, 330, 262, 196].forEach((f, i) => tone(B(), t + i * 0.22, f * p, 0.26, { type: 'triangle', peak: 0.18, r: 0.1 }));
+      tone(B(), t + 0.9, 196 * p, 1.1, { type: 'sawtooth', slideTo: 98, peak: 0.14, cutoff: 1200, cutoffEnd: 150, r: 0.3, detune: 10 });
+      tone(B(), t + 0.9, 196 * p, 1.1, { type: 'sawtooth', slideTo: 98, peak: 0.14, cutoff: 1200, cutoffEnd: 150, r: 0.3, detune: -10 });
+      tone(B(), t + 1.0, 100, 0.4, { type: 'sine', slideTo: 35, peak: 0.5, d: 0.3, s: 0.05 }); } }] },
+
+  /* ---- MILESTONES ---- */
+  { g: 'Milestones', id: 'stinger', name: 'Milestone stinger', when: 'For example 50 balls in a row. Variations drop the noisy falloff.', tiles: [
+    { v: 'orig', fn: stingerO },
+    { v: 'A', label: 'Clean fanfare', desc: 'Same arpeggio, chord fades out smoothly.', fn: stingerA },
+    { v: 'B', label: 'Bell fanfare', desc: 'Played on bells with a shimmering ending.', fn: stingerB },
+    { v: 'C', label: 'Brass stab', desc: 'Punchy saw line and a chord hit.', fn: stingerC }] },
+  { g: 'Milestones', id: 'clear', name: 'Board clear', when: 'Every block destroyed. Marked Cut, so these are three fresh takes.', tiles: [
+    { v: 'orig', fn: clearO },
+    { v: 'A', label: 'Sweep and chord', desc: 'A clean upward sweep into a wide chord.', fn: clearA },
+    { v: 'B', label: 'Cascade', desc: 'A fast run up three octaves onto bells.', fn: clearB },
+    { v: 'C', label: '8-bit jingle', desc: 'A short victory tune in square waves.', fn: clearC }] },
+  { g: 'Milestones', id: 'unlock', name: 'Mod unlocked', when: 'Every 25 rounds', tiles: [
+    { v: 'orig', fn: (t, p) => [784, 988, 1175, 1319, 1568].forEach((f, i) => {
+      tone(B(), t + i * 0.11, f * p, 0.6, { type: 'sine', peak: 0.12, a: 0.003, d: 0.5, s: 0.05, r: 0.2 });
+      tone(B(), t + i * 0.11, f * 2.756 * p, 0.3, { type: 'sine', peak: 0.03, d: 0.25, s: 0.05, r: 0.1 }); }) }] },
+
+  /* ---- ABILITIES ---- */
+  { g: 'Abilities', id: 'tapsplosion', name: 'Tapsplosion', when: 'Consumable: tapped tile explodes, ripples outward', tiles: [
+    { v: 'orig', fn: (t, p) => {
+      tone(B(), t, 120, 0.3, { type: 'sine', slideTo: 35, peak: 0.6, a: 0.001, d: 0.25, s: 0.05, r: 0.05 });
+      noise(B(), t, 0.35, { ftype: 'lowpass', f: 2500, fEnd: 200, peak: 0.3, q: 0.5 });
+      [600, 500, 700].forEach((f, i) => tone(B(), t + 0.06 + i * 0.015, f * p, 0.08, { type: 'sine', slideTo: f * 0.4, peak: 0.16, d: 0.06, s: 0.05, r: 0.03 }));
+      [420, 360].forEach((f, i) => tone(B(), t + 0.14 + i * 0.02, f * p, 0.09, { type: 'sine', slideTo: f * 0.4, peak: 0.09, d: 0.07, s: 0.05, r: 0.03 })); } }] },
+  { g: 'Abilities', id: 'delete', name: 'Delete tile', when: 'Consumable: remove one tile', tiles: [
+    { v: 'orig', fn: (t, p) => {
+      tone(B(), t, 900 * p, 0.18, { type: 'sawtooth', slideTo: 80, peak: 0.14, cutoff: 3000, d: 0.15, s: 0.05 });
+      noise(B(), t, 0.06, { ftype: 'highpass', f: 5000, peak: 0.1 }); } }] },
+  { g: 'Abilities', id: 'shiftup', name: 'Shift up', when: 'Consumable: all tiles move up a row', tiles: [
+    { v: 'orig', fn: (t, p) => {
+      noise(B(), t, 0.35, { f: 400, fEnd: 3000, peak: 0.14, q: 0.7, a: 0.05, d: 0.3, s: 0.6 });
+      tone(B(), t, 200 * p, 0.3, { type: 'sine', slideTo: 500 * p, peak: 0.1, d: 0.25, s: 0.4 });
+      tone(B(), t + 0.32, 100, 0.08, { type: 'sine', peak: 0.3, d: 0.06, s: 0.1 }); } }] },
+  { g: 'Abilities', id: '2048', name: '2048 slide', when: 'Consumable: tiles slam to one side', tiles: [
+    { v: 'orig', fn: (t, p) => {
+      noise(B(), t, 0.4, { f: 2500, fEnd: 600, peak: 0.18, q: 0.7, a: 0.02, d: 0.35, s: 0.4 });
+      [0.28, 0.33, 0.38, 0.43].forEach((o, i) => tone(B(), t + o, (220 - i * 20) * p, 0.07, { type: 'triangle', peak: 0.25, d: 0.05, s: 0.1, r: 0.03 })); } }] },
+
+  /* ---- MODS ---- */
+  { g: 'Mods', id: 'portal', name: 'Portal', when: 'Portals mod: ball enters and exits', tiles: [
+    { v: 'orig', fn: (t, p) => {
+      tone(B(), t, 300 * p, 0.35, { type: 'sine', slideTo: 1200 * p, peak: 0.14, vib: [12, 40], a: 0.02, d: 0.3, s: 0.6 });
+      tone(B(), t + 0.32, 1200 * p, 0.2, { type: 'sine', slideTo: 400 * p, peak: 0.12, vib: [12, 40], d: 0.15, s: 0.4 });
+      tone(B(), t, 600 * p, 0.3, { type: 'triangle', slideTo: 2400 * p, peak: 0.03 }); } }] },
+  { g: 'Mods', id: 'wrap', name: 'Wrap around', when: 'Wrap Around mod: ball crosses a wall', tiles: [
+    { v: 'orig', fn: (t, p) => {
+      noise(B(), t, 0.12, { f: 1000, fEnd: 4000, peak: 0.12, q: 0.8 });
+      tone(B(), t, 500 * p, 0.1, { type: 'sine', slideTo: 900 * p, peak: 0.06 }); } }] },
+  { g: 'Mods', id: 'missile', name: 'Missile blast', when: 'Missiles mod: ball explodes on contact', tiles: [
+    { v: 'orig', fn: (t, p) => {
+      noise(B(), t, 0.5, { ftype: 'lowpass', f: 4000, fEnd: 150, peak: 0.4, q: 0.5 });
+      tone(B(), t, 100 * p, 0.45, { type: 'sine', slideTo: 30, peak: 0.55, a: 0.001, d: 0.4, s: 0.05, r: 0.05 });
+      noise(B(), t + 0.05, 0.2, { ftype: 'highpass', f: 3000, peak: 0.1 }); } }] },
+  { g: 'Mods', id: 'poison', name: 'Poison tick', when: 'Poison mod: damage at end of round', tiles: [
+    { v: 'orig', fn: (t, p) => {
+      tone(B(), t, 300 * p, 0.07, { type: 'sine', slideTo: 600 * p, peak: 0.12, d: 0.05, s: 0.2 });
+      tone(B(), t + 0.09, 250 * p, 0.08, { type: 'sine', slideTo: 550 * p, peak: 0.1, d: 0.06, s: 0.2 }); } }] }
+];
+const GROUP_HUES = { UI: 'var(--cyan)', Balls: 'var(--green)', Blocks: 'var(--yellow)', Milestones: 'var(--magenta)', Abilities: 'var(--violet)', Mods: 'var(--orange)' };
+const tileId = (fam, tile) => 'sfx-' + fam.id + (tile.v === 'orig' ? '' : '-' + tile.v);
+const tileName = (fam, tile) => 'SFX, ' + fam.name + (tile.v === 'orig' ? (fam.tiles.length > 1 ? ' (original)' : '') : ', Var ' + tile.v + ' ' + tile.label);
+
+function playSfx(fn) {
+  initAudio();
+  const p = S.vary ? jitter(0.07) : 1;
+  fn(ctx.currentTime + 0.01, p);
+}
+
+/* =========================================================
+   Saved state: verdicts, notes, and per track mix, kept on this device.
+   Your marks from the last round are loaded the first time this file opens.
+   ========================================================= */
+const STORE_KEY = 'ballgame-sound-lab-v2';
+const SEED = {
+  'm-idle': ['keep', 'This one is great'], 'm-orbit': ['keep', 'A bit too ominous'], 'g-round': ['keep', 'Fun and upbeat'], 'g-deep': ['keep', 'Nice and chill'],
+  'sfx-hover': ['keep'], 'sfx-on': ['keep'], 'sfx-wall': ['keep', 'With a lot of balls bouncing, I would not want it to be too crazy'],
+  'sfx-lose': ['keep'], 'sfx-unlock': ['keep'], 'sfx-tapsplosion': ['keep'], 'sfx-delete': ['keep'], 'sfx-shiftup': ['keep'], 'sfx-2048': ['keep'],
+  'sfx-portal': ['keep'], 'sfx-wrap': ['keep'], 'sfx-missile': ['keep'], 'sfx-poison': ['keep'],
+  'm-attract': ['tweak', 'Very positive and upbeat, but could use a bit more of a build up at the start'],
+  'g-chip': ['tweak', 'A bit too quick and high pitched, but I like the idea of a higher energy beat'],
+  'sfx-click': ['tweak', 'Try variations so it does not get stale. Pretty quick attack and quite loud'],
+  'sfx-off': ['tweak', 'Try variations. Seems similar to toggle on'], 'sfx-launch': ['tweak', 'Try variations'],
+  'sfx-hit': ['tweak', 'I like the pitch rising, but want variations'], 'sfx-land': ['tweak'], 'sfx-pickup': ['tweak'],
+  'sfx-breakS': ['tweak'], 'sfx-breakL': ['tweak'], 'sfx-shift': ['tweak', 'See some variations'], 'sfx-danger': ['tweak'],
+  'sfx-stinger': ['tweak', 'The noisy falloff is not as nice'], 'sfx-clear': ['cut', 'Do variations of this']
+};
+let STORE = { items: {}, mix: {}, general: '' };
+let loaded = false;
+try { const raw = localStorage.getItem(STORE_KEY); if (raw) { STORE = { items: {}, mix: {}, general: '', ...JSON.parse(raw) }; loaded = true; } } catch (e) { /* storage may be blocked */ }
+if (!loaded) Object.entries(SEED).forEach(([id, [v, note]]) => { STORE.items[id] = { v, note: note || '' }; });
+function saveStore() { try { localStorage.setItem(STORE_KEY, JSON.stringify(STORE)); } catch (e) { /* ignore */ } }
+
+TRACKS.forEach(tr => { tr.mix = { ...DEFAULT_MIX, ...(STORE.mix[tr.id] || {}) }; });
+
+const LABELS = {};   // id -> display name, used for the summary
+
+function feedbackControls(id, label) {
+  LABELS[id] = label;
+  const cur = STORE.items[id] || { v: '', note: '' };
+  const wrap = el('div', 'fb');
+  const seg = el('div', 'seg');
+  ['keep', 'tweak', 'cut'].forEach(v => {
+    const b = el('button', '', v);
+    b.type = 'button'; b.dataset.v = v; b.dataset.noclick = '';
+    b.setAttribute('aria-pressed', cur.v === v ? 'true' : 'false');
+    b.addEventListener('click', () => {
+      const item = STORE.items[id] || (STORE.items[id] = { v: '', note: '' });
+      item.v = item.v === v ? '' : v;                       // click again to clear
+      seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === item.v ? 'true' : 'false'));
+      saveStore();
+    });
+    seg.appendChild(b);
+  });
+  const note = el('input');
+  note.type = 'text'; note.placeholder = 'Note'; note.value = cur.note; note.setAttribute('aria-label', 'Note for ' + label);
+  note.addEventListener('input', () => { (STORE.items[id] || (STORE.items[id] = { v: '', note: '' })).note = note.value; saveStore(); });
+  wrap.append(seg, note);
+  return wrap;
+}
+
+function keyText(k) { return k === 0 ? 'original key' : (k > 0 ? '+' : '') + k + ' semitones'; }
+
+function buildSummary() {
+  const lines = [];
+  const g = $('#general').value.trim();
+  if (g) lines.push('General direction: ' + g, '');
+  const groups = { keep: [], tweak: [], cut: [], note: [] };
+  Object.entries(STORE.items).forEach(([id, it]) => {
+    if (!LABELS[id]) return;
+    const text = LABELS[id] + (it.note ? ': ' + it.note : '');
+    if (it.v) groups[it.v].push(text); else if (it.note) groups.note.push(text);
+  });
+  const add = (title, arr) => { if (arr.length) { lines.push(title); arr.forEach(x => lines.push('- ' + x)); lines.push(''); } };
+  add('Keep as is:', groups.keep); add('Tweak:', groups.tweak); add('Cut:', groups.cut); add('Notes only:', groups.note);
+  // Mix settings that differ from the defaults, per track
+  const mixLines = [];
+  TRACKS.forEach(tr => {
+    const d = [];
+    if (tr.mix.key !== DEFAULT_MIX.key) d.push('key ' + keyText(tr.mix.key));
+    if (tr.mix.tempo !== DEFAULT_MIX.tempo) d.push('tempo ' + pct(tr.mix.tempo));
+    if (tr.mix.bright !== DEFAULT_MIX.bright) d.push('brightness ' + pct(tr.mix.bright));
+    if (tr.mix.echo !== DEFAULT_MIX.echo) d.push('echo ' + pct(tr.mix.echo));
+    if (tr.mix.space !== DEFAULT_MIX.space) d.push('space ' + pct(tr.mix.space));
+    if (tr.mix.vol !== DEFAULT_MIX.vol) d.push('level ' + pct(tr.mix.vol));
+    if (d.length) mixLines.push(trackTitle(tr).replace(/  \(.*\)$/, '') + ': ' + d.join(', '));
+  });
+  if (mixLines.length) { lines.push('Per track mix changes (defaults are tempo 101%, brightness 69%, echo 12%, space 48%):'); mixLines.forEach(x => lines.push('- ' + x)); }
+  $('#summary').value = lines.join('\n').trim();
+}
+
+/* =========================================================
+   Offline rendering and WAV export
+   The same voice code runs against an OfflineAudioContext, so exports match the preview.
+   ========================================================= */
+
+/* Run build() with the offline context and graph swapped in, then render */
+async function renderOffline(seconds, o, build) {
+  const rate = S.exp.rate;
+  const off = new OfflineAudioContext(2, Math.max(1, Math.ceil(seconds * rate)), rate);
+  const saved = { ctx, G, tierOv, danger: S.danger };
+  ctx = off; G = buildGraph(off, o);
+  try { S.danger = false; build(); } finally { ctx = saved.ctx; G = saved.G; tierOv = saved.tierOv; S.danger = saved.danger; }
+  return off.startRendering();
+}
+
+/* Turn a rendered buffer into channel arrays, with optional trim, seamless wrap, and level control */
+function finishBuffer(buf, { trim, wrapAt }) {
+  let chs = [buf.getChannelData(0), buf.getChannelData(1)];
+  if (wrapAt) {
+    // Fold the tail that rings past the loop end back onto the start so the loop is seamless
+    chs = chs.map(d => {
+      const res = d.slice(0, wrapAt);
+      for (let i = 0; i < d.length - wrapAt && i < wrapAt; i++) res[i] += d[wrapAt + i];
+      return res;
+    });
+  } else if (trim) {
+    // Trim trailing silence (below about -62 dB), keeping a short pad
+    let last = 0;
+    chs.forEach(d => { for (let i = d.length - 1; i > last; i--) if (Math.abs(d[i]) > 0.0008) { last = i; break; } });
+    const len = Math.min(chs[0].length, Math.max(Math.floor(0.05 * buf.sampleRate), last + Math.floor(0.03 * buf.sampleRate)));
+    chs = chs.map(d => d.slice(0, len));
+  }
+  let peak = 0;
+  chs.forEach(d => { for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > peak) peak = a; } });
+  // Either normalize to -1 dBFS, or only turn down when a file would clip
+  const target = S.exp.norm ? 0.891 : 0.977;
+  const gain = peak > 0 && (S.exp.norm || peak > target) ? target / peak : 1;
+  if (gain !== 1) chs.forEach(d => { for (let i = 0; i < d.length; i++) d[i] *= gain; });
+  return chs;
+}
+
+function encodeWav(chs, rate, bits) {
+  const n = chs[0].length, nc = chs.length, bps = bits / 8, dataLen = n * nc * bps;
+  const buf = new ArrayBuffer(44 + dataLen), v = new DataView(buf);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + dataLen, true); str(8, 'WAVE'); str(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, nc, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * nc * bps, true); v.setUint16(32, nc * bps, true); v.setUint16(34, bits, true);
+  str(36, 'data'); v.setUint32(40, dataLen, true);
+  let o = 44;
+  for (let i = 0; i < n; i++) for (let c = 0; c < nc; c++) {
+    const s = Math.max(-1, Math.min(1, chs[c][i]));
+    if (bits === 16) { v.setInt16(o, Math.round(s < 0 ? s * 32768 : s * 32767), true); o += 2; }
+    else { const x = Math.round(s < 0 ? s * 8388608 : s * 8388607); v.setUint8(o, x & 255); v.setUint8(o + 1, (x >> 8) & 255); v.setUint8(o + 2, (x >> 16) & 255); o += 3; }
+  }
+  return new Uint8Array(buf);
+}
+
+/* Render one sound effect to WAV bytes. Pitch jitter is off so files are deterministic in pitch. */
+async function renderSfx(fn) {
+  const buf = await renderOffline(4, { sfxOnly: true, master: 1, sfxVol: 1 }, () => fn(0.01, 1));
+  return encodeWav(finishBuffer(buf, { trim: true }), S.exp.rate, S.exp.bits);
+}
+
+/* Render a music loop or its intro. tierN forces the game tier. */
+async function renderMusic(tr, part, tierN) {
+  const sd = stepDur(tr, false), is = introSteps(tr);
+  const isIntro = part === 'intro';
+  const s0 = isIntro ? 0 : is, s1 = isIntro ? is : is + tr.prog.length * 16;
+  const len = (s1 - s0) * sd, tail = isIntro ? 2.5 : 4.5;
+  const buf = await renderOffline(len + tail, { mix: tr.mix, tr, master: 1, musicVol: tr.mix.vol, sfxVol: 1 }, () => {
+    tierOv = tierN ?? null;
+    for (let st = s0; st < s1; st++) scheduleStep(tr, st, (st - s0) * sd, G.musicBus);
+  });
+  const chs = finishBuffer(buf, { wrapAt: isIntro ? 0 : Math.round(len * S.exp.rate), trim: false });
+  return { bytes: encodeWav(chs, S.exp.rate, S.exp.bits), seconds: chs[0].length / S.exp.rate, loopSeconds: len };
+}
+
+/* ---------- download and zip ---------- */
+function download(name, blob) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+}
+
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+
+/* Minimal ZIP writer: files are stored without compression, which is fine for WAV */
+function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], central = [];
+  let offset = 0;
+  files.forEach(f => {
+    const name = enc.encode(f.name), crc = crc32(f.data), size = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+    lh.setUint16(10, 0, true); lh.setUint16(12, 33, true); lh.setUint32(14, crc, true); lh.setUint32(18, size, true); lh.setUint32(22, size, true);
+    lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    parts.push(new Uint8Array(lh.buffer), name, f.data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+    ch.setUint16(12, 0, true); ch.setUint16(14, 33, true); ch.setUint32(16, crc, true); ch.setUint32(20, size, true); ch.setUint32(24, size, true);
+    ch.setUint16(28, name.length, true); ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), name);
+    offset += 30 + name.length + size;
+  });
+  const cSize = central.reduce((a, b) => a + b.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cSize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: 'application/zip' });
+}
+
+/* ---------- names ---------- */
+const musicBase = tr => (tr.group === 'menu' ? 'menu_' : 'game_') + slug(tr.name) + (tr.v ? '_' + tr.v.toLowerCase() + '_' + slug(tr.label) : '');
+const sfxFile = (fam, tile) => 'sfx_' + slug(fam.name) + (tile.v === 'orig' ? '' : '_' + tile.v.toLowerCase() + '_' + slug(tile.label));
+
+let toastTimer;
+function toast(msg, sticky) {
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer);
+  if (!sticky) toastTimer = setTimeout(() => { t.hidden = true; }, 3500);
+}
+
+async function exportOneSfx(fam, tile, btn) {
+  btn.disabled = true; toast('Rendering ' + sfxFile(fam, tile) + '.wav', true);
+  try { download(sfxFile(fam, tile) + '.wav', new Blob([await renderSfx(tile.fn)], { type: 'audio/wav' })); toast('Exported ' + sfxFile(fam, tile) + '.wav'); }
+  catch (e) { toast('Export failed: ' + e.message); }
+  btn.disabled = false;
+}
+
+async function exportOneMusic(tr, part, tierSel, btn) {
+  const tierN = tr.group === 'game' ? (tierSel === 'cur' ? tier() : +tierSel) : null;
+  const name = musicBase(tr) + (tierN ? '_tier' + tierN : '') + '_' + part + '.wav';
+  btn.disabled = true; toast('Rendering ' + name, true);
+  try { const r = await renderMusic(tr, part, tierN); download(name, new Blob([r.bytes], { type: 'audio/wav' })); toast('Exported ' + name); }
+  catch (e) { toast('Export failed: ' + e.message); }
+  btn.disabled = false;
+}
+
+async function exportEverything() {
+  const btn = $('#expAll'), msg = $('#expMsg');
+  const wantMusic = $('#incMusic').checked, wantSfx = $('#incSfx').checked, allTiers = $('#incTiers').checked, wantVars = $('#incVars').checked;
+  const jobs = [];
+  if (wantMusic) TRACKS.filter(tr => wantVars || !tr.v).forEach(tr => {
+    const tiers = tr.group === 'game' ? (allTiers ? [1, 2, 3, 4, 5] : [5]) : [null];
+    tiers.forEach(tn => {
+      if (tr.intro && tn === tiers[0]) jobs.push({ kind: 'music', tr, part: 'intro', tn });
+      jobs.push({ kind: 'music', tr, part: 'loop', tn });
+    });
+  });
+  if (wantSfx) FAMS.forEach(fam => fam.tiles.filter(tl => wantVars || tl.v === 'orig').forEach(tile => jobs.push({ kind: 'sfx', fam, tile })));
+  if (!jobs.length) { msg.textContent = 'Nothing selected.'; return; }
+  btn.disabled = true;
+  const files = [], notes = ['Ballgame Sound Lab export', 'Sample rate ' + S.exp.rate + ' Hz, ' + S.exp.bits + ' bit stereo WAV.', 'Music loops are seamless: reverb and echo tails are folded onto the start.', 'Intro files play once, then the loop file repeats.', ''];
+  try {
+    for (let i = 0; i < jobs.length; i++) {
+      const j = jobs[i];
+      const label = j.kind === 'music' ? musicBase(j.tr) + ' ' + j.part : sfxFile(j.fam, j.tile);
+      msg.textContent = 'Rendering ' + (i + 1) + ' of ' + jobs.length + ': ' + label; toast(msg.textContent, true);
+      await sleep(0);   // let the page repaint between renders
+      if (j.kind === 'music') {
+        const r = await renderMusic(j.tr, j.part, j.tn);
+        const name = 'music/' + musicBase(j.tr) + (j.tn ? '_tier' + j.tn : '') + '_' + j.part + '.wav';
+        files.push({ name, data: r.bytes });
+        notes.push(name + ': ' + Math.round(j.tr.bpm * j.tr.mix.tempo) + ' BPM, ' + r.seconds.toFixed(2) + ' s' + (j.part === 'loop' ? ' loop' : ' intro'));
+      } else {
+        files.push({ name: 'sfx/' + sfxFile(j.fam, j.tile) + '.wav', data: await renderSfx(j.tile.fn) });
+      }
+    }
+    files.push({ name: 'README.txt', data: new TextEncoder().encode(notes.join('\n')) });
+    download('ballgame_audio_export.zip', makeZip(files));
+    msg.textContent = 'Done: ' + jobs.length + ' files in ballgame_audio_export.zip'; toast(msg.textContent);
+  } catch (e) { msg.textContent = 'Export failed: ' + e.message; toast(msg.textContent); }
+  btn.disabled = false;
+}
+
+/* =========================================================
+   UI construction
+   ========================================================= */
+function mixPanel(tr) {
+  const d = el('details', 'mix');
+  d.appendChild(el('summary', '', 'Mix and feel'));
+  const grid = el('div', 'knobs');
+  const refs = [];
+  const add = (k, label, min, max, step, fmt) => {
+    const box = el('div', 'knob');
+    const id = 'mx-' + tr.id + '-' + k;
+    box.innerHTML = `<label for="${id}">${label} <output></output></label><input id="${id}" type="range" min="${min}" max="${max}" step="${step}">`;
+    const input = box.querySelector('input'), out = box.querySelector('output');
+    const sync = () => { input.value = tr.mix[k]; out.textContent = fmt(tr.mix[k]); };
+    input.addEventListener('input', () => {
+      tr.mix[k] = +input.value; out.textContent = fmt(tr.mix[k]);
+      STORE.mix[tr.id] = { ...tr.mix }; saveStore();
+      if (M.track === tr) applyMix(tr);
+    });
+    sync(); refs.push(sync); grid.appendChild(box);
+  };
+  add('key', 'Key', -6, 6, 1, keyText);
+  add('tempo', 'Tempo', 0.7, 1.4, 0.01, pct);
+  add('bright', 'Brightness', 0, 1, 0.01, pct);
+  add('echo', 'Echo', 0, 0.7, 0.01, pct);
+  add('space', 'Space', 0, 0.9, 0.01, pct);
+  add('vol', 'Track level', 0, 1.2, 0.01, pct);
+  d.appendChild(grid);
+  const reset = el('button', 'btn sm', 'Reset to defaults'); reset.type = 'button'; reset.dataset.noclick = '';
+  reset.style.marginTop = '10px';
+  reset.addEventListener('click', () => { tr.mix = { ...DEFAULT_MIX }; delete STORE.mix[tr.id]; saveStore(); refs.forEach(f => f()); if (M.track === tr) applyMix(tr); });
+  d.appendChild(reset);
+  return d;
+}
+
+function buildTrackCard(tr, multi) {
+  const c = el('article', 'tile' + (tr.v || (multi && !tr.v) ? '' : ''));
+  if (multi && !tr.v) c.classList.add('orig');
+  c.style.setProperty('--hue', tr.group === 'menu' ? 'var(--magenta)' : 'var(--cyan)');
+  const head = tr.v ? 'Var ' + tr.v : (multi ? 'Original' : '');
+  c.innerHTML = `${head ? `<span class="tag">${head}</span>` : ''}<h4>${tr.v ? tr.label : tr.name}</h4>
+    <p class="meta">${tr.bpm} BPM${tr.intro ? ', 4 bar build-up + 4 bar loop' : ', 4 bar loop'}</p><p class="blurb">${tr.blurb}</p>`;
+  const act = el('div', 'actions');
+  const play = el('button', 'btn primary', 'Play'); play.type = 'button'; play.dataset.track = tr.id; play.dataset.noclick = '';
+  play.addEventListener('click', () => { if (M.track === tr) stopTrack(); else playTrack(tr); });
+  act.appendChild(play);
+  c.appendChild(act);
+
+  // Export controls: loop, intro when there is one, and a tier picker for game tracks
+  const ex = el('div', 'exp-row');
+  let sel = null;
+  if (tr.group === 'game') {
+    sel = el('select'); sel.setAttribute('aria-label', 'Export tier for ' + tr.name);
+    sel.innerHTML = '<option value="cur">Current tier</option>' + [1, 2, 3, 4, 5].map(n => `<option value="${n}">Tier ${n}</option>`).join('');
+    ex.appendChild(sel);
+  }
+  const bl = el('button', 'btn sm', 'Loop WAV'); bl.type = 'button'; bl.dataset.noclick = '';
+  bl.addEventListener('click', () => exportOneMusic(tr, 'loop', sel ? sel.value : null, bl));
+  ex.appendChild(bl);
+  if (tr.intro) {
+    const bi = el('button', 'btn sm', 'Intro WAV'); bi.type = 'button'; bi.dataset.noclick = '';
+    bi.addEventListener('click', () => exportOneMusic(tr, 'intro', sel ? sel.value : null, bi));
+    ex.appendChild(bi);
+  }
+  c.appendChild(ex);
+  c.appendChild(mixPanel(tr));
+  c.appendChild(feedbackControls(tr.id, 'Music, ' + tr.name + (tr.v ? ' ' + tr.v + ': ' + tr.label : (multi ? ' (original)' : ''))));
+  return c;
+}
+
+function buildMusicFamilies(list, host) {
+  list.forEach(ids => {
+    const multi = ids.length > 1;
+    const fam = el('div', 'fam' + (multi ? ' multi' : ''));
+    if (multi) fam.appendChild(el('div', 'fam-head', `<h4>${TRACK[ids[0]].name}: original plus three variations</h4><p>${TRACK[ids[0]].group === 'menu' ? 'You asked for a bigger build-up at the start. Each variation plays a four bar intro once, then the same loop repeats.' : 'You wanted the high energy beat but less speed and less piercing pitch. Each variation drops the register and slows down in a different way.'}</p>`));
+    const tiles = el('div', 'tiles');
+    ids.forEach(id => tiles.appendChild(buildTrackCard(TRACK[id], multi)));
+    fam.appendChild(tiles);
+    host.appendChild(fam);
+  });
+}
+buildMusicFamilies(MENU_FAMS, $('#menuTracks'));
+buildMusicFamilies(GAME_FAMS, $('#gameTracks'));
+
+function refreshButtons() {
+  document.querySelectorAll('[data-track]').forEach(b => {
+    const on = M.track && M.track.id === b.dataset.track;
+    b.textContent = on ? 'Stop' : 'Play';
+    b.classList.toggle('playing', !!on);
+    b.classList.toggle('primary', !on);
+  });
+}
+
+// SFX grouped by category, one family card each
+const groupNames = [...new Set(FAMS.map(f => f.g))];
+groupNames.forEach(gn => {
+  const grp = el('div', 'grp'); grp.style.setProperty('--hue', GROUP_HUES[gn]);
+  grp.appendChild(el('h3', '', gn));
+  const grid = el('div', 'grid');
+  FAMS.filter(f => f.g === gn).forEach(fam => {
+    const multi = fam.tiles.length > 1;
+    const card = el('article', 'fam' + (multi ? ' multi' : '')); card.style.setProperty('--hue', GROUP_HUES[gn]);
+    if (multi) {
+      const head = el('div', 'fam-head', `<h4>${fam.name}</h4><p>${fam.when}</p>`);
+      const all = el('button', 'btn sm', 'Play in order'); all.type = 'button'; all.dataset.noclick = '';
+      all.addEventListener('click', () => fam.tiles.forEach((tile, i) => setTimeout(() => playSfx(tile.fn), i * 1100)));
+      head.appendChild(all); card.appendChild(head);
+    }
+    const tiles = el('div', 'tiles');
+    fam.tiles.forEach(tile => {
+      const tl = el('div', 'tile' + (tile.v === 'orig' && multi ? ' orig' : ''));
+      if (multi) tl.appendChild(el('span', 'tag', tile.v === 'orig' ? 'Original' : 'Var ' + tile.v));
+      const go = el('button', 'sfx-go', `<span class="tri"></span><span><strong>${multi ? (tile.v === 'orig' ? 'What you heard' : tile.label) : fam.name}</strong><small>${multi ? (tile.v === 'orig' ? 'The first version, for comparison.' : tile.desc) : fam.when}</small></span>`);
+      go.type = 'button'; go.dataset.noclick = '';
+      go.addEventListener('click', () => playSfx(tile.fn));
+      tl.appendChild(go);
+      const act = el('div', 'actions');
+      if (tile.alt) { const a = el('button', 'btn sm', tile.alt.label); a.type = 'button'; a.dataset.noclick = ''; a.addEventListener('click', () => playSfx(tile.alt.fn)); act.appendChild(a); }
+      const w = el('button', 'btn sm', 'WAV'); w.type = 'button'; w.dataset.noclick = '';
+      w.addEventListener('click', () => exportOneSfx(fam, tile, w));
+      act.appendChild(w); tl.appendChild(act);
+      tl.appendChild(feedbackControls(tileId(fam, tile), tileName(fam, tile)));
+      tiles.appendChild(tl);
+    });
+    card.appendChild(tiles);
+    grid.appendChild(card);
+  });
+  grp.appendChild(grid);
+  $('#sfxGroups').appendChild(grp);
+});
+
+// Any other button gets the game's own click sound once audio is running
+document.addEventListener('click', e => {
+  const b = e.target.closest('.btn');
+  if (b && ctx && !('noclick' in b.dataset)) playSfx(clickO);
+});
+
+/* ---------- project settings ---------- */
+const bind = (id, key, fmt, apply) => {
+  const input = $('#' + id), out = $('#' + id + 'Out');
+  const upd = () => { S[key] = +input.value; if (out) out.textContent = fmt(S[key]); if (apply) apply(); };   // master has no readout
+  input.addEventListener('input', upd); upd();
+};
+bind('musicVol', 'musicVol', pct, () => { if (M.track) applyMix(M.track); else if (G && G.musicBus) G.musicBus.gain.value = S.musicVol; });
+bind('sfxVol', 'sfxVol', pct, () => { if (G) G.sfxBus.gain.value = S.sfxVol; });
+bind('master', 'master', pct, () => { if (G) G.master.gain.value = S.master; });
+$('#vary').addEventListener('change', e => { S.vary = e.target.checked; });
+
+// Round slider drives the game track tier
+const LAYER_NAMES = { pad: 'pads', bass: 'bass', kick: 'kick', snare: 'snare', hat: 'hats', hatHi: 'fast hats', arp: 'arpeggio', lead: 'lead', crash: 'crash' };
+function updateTierLine() {
+  const tr = (M.track && M.track.group === 'game') ? M.track : TRACK['g-round'];
+  const lv = tier();
+  const active = Object.keys(tr.layers).filter(k => tr.layers[k] <= lv).map(k => LAYER_NAMES[k]);
+  $('#tierLine').innerHTML = `Tier <b>${lv} of 5</b> on ${tr.name}${tr.v ? ' ' + tr.v : ''}: ${active.join(', ')}`;
+}
+bind('round', 'round', v => String(v), updateTierLine);
+
+$('#danger').addEventListener('click', e => {
+  S.danger = !S.danger;
+  e.currentTarget.setAttribute('aria-pressed', S.danger);
+  e.currentTarget.textContent = 'Blocks near the floor: ' + (S.danger ? 'on' : 'off');
+  e.currentTarget.classList.toggle('playing', S.danger);
+});
+$('#stop').addEventListener('click', stopTrack);
+
+/* ---------- export settings ---------- */
+$('#expRate').addEventListener('change', e => { S.exp.rate = +e.target.value; });
+$('#expBits').addEventListener('change', e => { S.exp.bits = +e.target.value; });
+$('#expNorm').addEventListener('change', e => { S.exp.norm = e.target.value === '1'; });
+$('#expAll').addEventListener('click', exportEverything);
+
+/* ---------- feedback summary ---------- */
+$('#gen').addEventListener('click', buildSummary);
+$('#general').value = STORE.general || '';
+$('#general').addEventListener('input', e => { STORE.general = e.target.value; saveStore(); });
+$('#copy').addEventListener('click', async () => {
+  buildSummary();
+  const txt = $('#summary').value, msg = $('#copyMsg');
+  try { await navigator.clipboard.writeText(txt); msg.textContent = 'Copied. Paste it into the chat.'; }
+  catch (e) { $('#summary').select(); msg.textContent = 'Select the text and copy it by hand.'; }
+});
+buildSummary();
+
+/* =========================================================
+   Transport visuals: step dots and a spectrum drawn with the game's ROYGBIV ramp
+   ========================================================= */
+const dots = $('#dots');
+for (let i = 0; i < 16; i++) dots.appendChild(el('i', i % 4 === 0 ? 'beat' : ''));
+const dotEls = [...dots.children];
+const scope = $('#scope'), sc = scope.getContext('2d');
+const RAMP = ['#ff3b3b', '#ff8a3d', '#ffd23f', '#56f58a', '#3ff0ff', '#5b7bff', '#a77bff'];
+
+function frame() {
+  // Light the current sixteenth step once the audio clock reaches it
+  if (ctx && M.track) {
+    while (M.vis.length && M.vis[0][0] <= ctx.currentTime) M.lastStep = M.vis.shift()[1];
+    const s = M.lastStep >= 0 ? M.lastStep % 16 : -1;
+    dotEls.forEach((d, i) => d.classList.toggle('on', i === s));
+    const is = introSteps(M.track), inIntro = M.lastStep >= 0 && M.lastStep < is;
+    const bar = M.lastStep >= 0 ? Math.floor(M.lastStep / 16) % M.track.prog.length + 1 : 1;
+    $('#nowLabel').textContent = inIntro ? 'Build-up, bar ' + (Math.floor(M.lastStep / 16) + 1) + ' of ' + M.track.intro.bars : 'Music, bar ' + bar + ' of ' + M.track.prog.length;
+  } else {
+    dotEls.forEach(d => d.classList.remove('on'));
+    $('#nowLabel').textContent = 'Music';
+  }
+  // Spectrum
+  sc.clearRect(0, 0, scope.width, scope.height);
+  const bars = 28, w = scope.width / bars;
+  if (G && G.analyser) {
+    const data = new Uint8Array(G.analyser.frequencyBinCount);
+    G.analyser.getByteFrequencyData(data);
+    for (let i = 0; i < bars; i++) {
+      const v = data[Math.floor(i * 0.9) + 1] / 255;
+      const h = Math.max(2, v * scope.height);
+      sc.fillStyle = RAMP[Math.floor(i / bars * RAMP.length)];
+      sc.fillRect(i * w + 1, scope.height - h, w - 2, h);
+    }
+  } else {
+    sc.fillStyle = '#2f2a6b';
+    for (let i = 0; i < bars; i++) sc.fillRect(i * w + 1, scope.height - 2, w - 2, 2);
+  }
+  requestAnimationFrame(frame);
+}
+frame();
+
+// Test hook so the export path can be checked from a script
+window.__lab = { renderSfx, renderMusic, TRACK, FAMS, makeZip, S };
+})();
+</script>
+</body>
+</html>

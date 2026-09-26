@@ -13,6 +13,8 @@ enum Shape { SQUARE, CIRCLE }
 const INSET_FRACTION := 0.06
 
 var value: int = 1
+## What the block spawned with, so the break sound can tell a big block from a small one.
+var start_value: int = 1
 var grid_col: int = 0
 var grid_row: int = 0
 
@@ -36,6 +38,7 @@ func get_size() -> float:
 ## Call after adding to the tree.
 func setup(start_value: int, cell_size: float, col: int, row: int) -> void:
 	value = maxi(1, start_value)
+	self.start_value = value
 	_size = cell_size
 	grid_col = col
 	grid_row = row

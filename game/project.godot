@@ -28,6 +28,7 @@ Settings="*res://scripts/settings_state.gd"
 Unlocks="*res://scripts/unlocks_state.gd"
 Skins="*res://scripts/skins.gd"
 Run="*res://scripts/run_state.gd"
+AudioLib="*res://scripts/audio_lib.gd"
 
 [display]
 
