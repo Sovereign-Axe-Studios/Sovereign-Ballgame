@@ -1051,3 +1051,23 @@ sketch. The card rests on the first mod. It's read-only, and rebuilt in
 Game installs the mods and the status lines change during play. With no mods
 it says "No mods -- stock rules."
 
+### Curated modes
+`scripts/modes/curated_modes.gd` now holds 11 presets (the two placeholders
+are rewritten):
+- Boss Rush
+- Tilt
+- Plague (Poison + Virus + Health)
+- Pinball (Circles + Sprinkler + Snowball)
+- Laser Grid (Bounce Pierce + Checkers)
+- Avalanche (Reinforcements + Snowball + Health)
+- Kaleidoscope (Triangles + Random Tilt + Spread)
+- Traffic Jam (Pile-Up + Triangles + Lives)
+- Marathon (9x11 + Sprinkler + Lives)
+- Pocket Arena (5x7 + Snowball + Health)
+- **Hearthian** (Wormholes + Time Rewind + Circles), which shows as a ???
+  card until the Outer Wilds egg is solved (`CuratedModes.is_unlocked`).
+
+Mode Select's list is now a two-column grid of cards (name, the mods' icons
+animating on hover, and the description). Rule: at most one mod per category
+per preset. All 11 were checked for it, and each was auto-played to round 6.
+

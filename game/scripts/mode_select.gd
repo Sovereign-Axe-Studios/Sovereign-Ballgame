@@ -1,8 +1,8 @@
 class_name ModeSelect
 extends Node2D
 ## Play -> pick a mode. Two pages:
-##   List:   the curated modes (CuratedModes.all()), then CUSTOM, then BACK.
-##           A curated mode starts the run immediately.
+##   List:   the curated modes (CuratedModes.all()) as a two-column grid of
+##           cards, then CUSTOM, then BACK. A card starts its run at once.
 ##   Custom: a character-select grid -- one neon row per GameMod.Category,
 ##           a tile for None plus each of that category's mods from Cfg.MODS.
 ##           Tiles animate their draw_preview on hover; the ? corner opens a
@@ -17,6 +17,8 @@ const TILE_SIZE := Vector2(156.0, 172.0)
 const ICON_SIZE := 112.0
 const DETAIL_PREVIEW_SIZE := Vector2(420.0, 560.0)
 const LOCKED_HINT := "Look to the stars."
+const MODE_CARD_SIZE := Vector2(431.0, 250.0)
+const MODE_ICON_SIZE := 84.0
 
 var _root: Control
 var _detail: Control
@@ -109,14 +111,14 @@ func _build_list_page() -> Control:
 	var parts := _page("SELECT MODE")
 	var col: VBoxContainer = parts[1]
 
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 18)
+	grid.add_theme_constant_override("v_separation", 18)
+	col.add_child(grid)
 	for mode: Dictionary in CuratedModes.all():
-		var btn := NeonUI.button(str(mode.name).to_upper(), true)
-		var mode_name: String = mode.name
-		var mode_mods: Array[GDScript] = mode.mods
-		btn.pressed.connect(func() -> void: Run.start(mode_name, mode_mods))
-		col.add_child(btn)
-		col.add_child(NeonUI.label("%s\n%s" % [mode.description, _mod_names(mode_mods)], 24, NeonUI.TEXT_DIM))
-		col.add_child(_spacer(12.0))
+		grid.add_child(_mode_card(mode))
+	col.add_child(_spacer(20.0))
 
 	var custom_btn := NeonUI.button("CUSTOM")
 	custom_btn.pressed.connect(func() -> void: _show(_custom_page))
@@ -128,6 +130,63 @@ func _build_list_page() -> Control:
 	back_btn.pressed.connect(func() -> void: get_tree().change_scene_to_file(TITLE_SCENE))
 	col.add_child(back_btn)
 	return parts[0]
+
+## A curated mode as a clickable card: name, a row of its mod icons (they
+## animate while hovered), and its description. A mode using a locked mod is
+## a ??? card until it's unlocked.
+func _mode_card(mode: Dictionary) -> Control:
+	var unlocked := CuratedModes.is_unlocked(mode)
+	var mods: Array[GDScript] = mode.mods
+	var card := Button.new()
+	card.custom_minimum_size = MODE_CARD_SIZE
+	card.focus_mode = Control.FOCUS_NONE
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var sb := NeonUI.box(state == "hover" or state == "pressed", NeonUI.CYAN, 0.0) 			if state != "disabled" else NeonUI.disabled_box()
+		sb.skew = Vector2.ZERO
+		card.add_theme_stylebox_override(state, sb)
+	card.disabled = not unlocked
+	card.tooltip_text = _mod_names(mods) if unlocked else LOCKED_HINT
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 10)
+	col.set_anchors_preset(Control.PRESET_FULL_RECT)
+	col.offset_left = 18.0
+	col.offset_right = -18.0
+	col.offset_top = 14.0
+	col.offset_bottom = -14.0
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(col)
+
+	var title := NeonUI.label(str(mode.name).to_upper() if unlocked else "???", 30,
+		NeonUI.CYAN if unlocked else NeonUI.TEXT_DIM)
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(title)
+
+	var icons := HBoxContainer.new()
+	icons.add_theme_constant_override("separation", 8)
+	icons.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(icons)
+	var previews: Array[ModPreviewIcon] = []
+	for script in mods:
+		var icon := ModPreviewIcon.new(script.new() as GameMod, not unlocked)
+		icon.custom_minimum_size = Vector2.ONE * MODE_ICON_SIZE
+		icons.add_child(icon)
+		previews.append(icon)
+
+	var desc := NeonUI.label(str(mode.description) if unlocked else LOCKED_HINT, 20, NeonUI.TEXT_SOFT)
+	desc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	col.add_child(desc)
+
+	if unlocked:
+		var mode_name: String = mode.name
+		card.pressed.connect(func() -> void: Run.start(mode_name, mods))
+		card.mouse_entered.connect(func() -> void:
+			for icon in previews:
+				icon.playing = true)
+		card.mouse_exited.connect(func() -> void:
+			for icon in previews:
+				icon.playing = false)
+	return card
 
 func _mod_names(scripts: Array[GDScript]) -> String:
 	var names: Array[String] = []
