@@ -19,6 +19,8 @@ var _root_page: Control
 var _settings_page: Control
 var _debug_page: Control
 var _skins_page: Control
+var _mods_page: Control
+var _active_mods: ActiveModsPanel
 var _current_page: Control
 
 var _mode_label: Label
@@ -77,11 +79,12 @@ func _apply_ui_scale() -> void:
 
 func _show_page(page: Control) -> void:
 	_current_page = page
-	for p: Control in [_root_page, _settings_page, _debug_page, _skins_page]:
+	for p: Control in [_root_page, _settings_page, _debug_page, _skins_page, _mods_page]:
 		p.visible = p == page
 
 func _sync_fields() -> void:
 	_mode_label.text = _mode_summary()
+	_active_mods.show_mods(_game.rules)
 	_debug_toggle.set_pressed_no_signal(Debug.enabled)
 	_debug_explainer.visible = Debug.enabled
 	_invincible_toggle.set_pressed_no_signal(Debug.invincible)
@@ -128,7 +131,8 @@ func _build_ui() -> void:
 	_settings_page = _page(_build_settings_page)
 	_debug_page = _page(_build_debug_page)
 	_skins_page = _page(_build_skins_page)
-	for p in [_root_page, _settings_page, _debug_page, _skins_page]:
+	_mods_page = _page(_build_mods_page)
+	for p in [_root_page, _settings_page, _debug_page, _skins_page, _mods_page]:
 		stack.add_child(p)
 
 ## A NeonUI page whose column `build` fills.
@@ -147,6 +151,7 @@ func _build_root_page(col: VBoxContainer) -> void:
 	var resume_btn := NeonUI.button("RESUME", true)
 	resume_btn.pressed.connect(close)
 	col.add_child(resume_btn)
+	col.add_child(_nav_button("MODS", func() -> Control: return _mods_page))
 	col.add_child(_nav_button("SETTINGS", func() -> Control: return _settings_page))
 	col.add_child(_nav_button("SKINS", func() -> Control: return _skins_page))
 	col.add_child(_nav_button("DEBUG MENU", func() -> Control: return _debug_page))
@@ -160,6 +165,14 @@ func _build_root_page(col: VBoxContainer) -> void:
 func _build_settings_page(col: VBoxContainer) -> void:
 	col.add_child(NeonUI.header("Settings"))
 	col.add_child(SettingsPanel.new())
+	col.add_child(_back_button())
+
+## The run's mods, hover for details. Filled on open (see _sync_fields):
+## this menu is built before Game installs them.
+func _build_mods_page(col: VBoxContainer) -> void:
+	col.add_child(NeonUI.header("Mods"))
+	_active_mods = ActiveModsPanel.new()
+	col.add_child(_active_mods)
 	col.add_child(_back_button())
 
 func _build_skins_page(col: VBoxContainer) -> void:

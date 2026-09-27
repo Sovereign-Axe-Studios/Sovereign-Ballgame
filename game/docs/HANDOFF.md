@@ -1041,3 +1041,13 @@ scaled-down background viewport, pulled out of `SkinPreview`.
   valued 1..100, coloured with `Palette.ramp_color(ramp, value)`. It follows
   hover the same way.
 
+### Pause menu: Mods page
+Root page gets **MODS** (first after Resume). `ActiveModsPanel`
+(`scripts/ui/active_mods_panel.gd`) shows the run's installed mods as tiles.
+Hovering one animates its icon and fills a detail card with the category,
+name, description, live `status_text` (e.g. LIVES 2) and a larger looping
+sketch. The card rests on the first mod. It's read-only, and rebuilt in
+`_sync_fields` every time the menu opens, because the menu is built before
+Game installs the mods and the status lines change during play. With no mods
+it says "No mods -- stock rules."
+
