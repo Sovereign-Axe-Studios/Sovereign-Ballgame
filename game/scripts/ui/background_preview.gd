@@ -25,6 +25,10 @@ func _init(view_scale: float) -> void:
 	add_child(container)
 	_viewport = SubViewport.new()
 	_viewport.size = Vector2i(view)
+	# Its own World2D: by default a SubViewport shares its parent's, and the
+	# 2D canvas lives in the World2D -- so it drew the game's blocks and balls,
+	# and the background node added here leaked into the game's canvas too.
+	_viewport.world_2d = World2D.new()
 	container.add_child(_viewport)
 	_flat = ColorRect.new()
 	_flat.size = view

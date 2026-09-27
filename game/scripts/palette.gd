@@ -26,7 +26,11 @@ const ROYGBIV: Array[Color] = [
 ## block that asks for a health colour from then on -- ROYGBIV is still the
 ## default skin's ramp, just no longer hardcoded here.
 static func health_color(value: int, max_value: int = 100) -> Color:
-	var ramp: Array[Color] = Skins.block().ramp
+	return ramp_color(Skins.block().ramp, value, max_value)
+
+## A value's colour on any block ramp (the Skins menu previews ramps that
+## aren't selected yet).
+static func ramp_color(ramp: Array[Color], value: int, max_value: int = 100) -> Color:
 	var t := clampf(float(value) / float(maxi(1, max_value)), 0.0, 1.0)
 	var scaled := t * float(ramp.size() - 1)
 	var i := int(floor(scaled))

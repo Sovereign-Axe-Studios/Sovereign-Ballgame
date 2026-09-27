@@ -5,8 +5,9 @@ extends VBoxContainer
 ## Each category is a preview swatch, a title, and a row of NeonUI chips;
 ## locked skins are disabled "???" chips. Selection goes through `Skins`.
 ##
-## Backgrounds also get a live BackgroundPreview beside their chips, showing
-## the chip under the mouse and falling back to the selected one. A host with
+## Backgrounds also get a live BackgroundPreview beside their chips, and
+## blocks a BlockRampPreview (a wall of bricks across the colour ramp); both
+## show the chip under the mouse and fall back to the selected one. A host with
 ## its own bigger preview (the Asset Viewer) turns that off and listens to
 ## `background_hovered` instead.
 
@@ -18,6 +19,7 @@ const SWATCH := Vector2(72.0, 72.0)
 const BG_PREVIEW_SCALE := 0.2
 
 var _bg_preview: BackgroundPreview
+var _block_preview := BlockRampPreview.new()
 
 func _init(inline_background_preview: bool = true) -> void:
 	if inline_background_preview:
@@ -34,11 +36,30 @@ func _init(inline_background_preview: bool = true) -> void:
 		func() -> int: return Skins.background_index,
 		func(i: int) -> void: Skins.set_background(i),
 		_on_background_hover, _bg_preview))
-	# A method connection: disconnects itself when this panel is freed.
+	add_child(_category(_block_swatch(), "Block", Skins.picker_names(Skins.block_skins),
+		func() -> int: return Skins.block_index,
+		func(i: int) -> void: Skins.set_block(i),
+		_on_block_hover, _block_preview))
+	add_child(_category(_launcher_swatch(), "Launcher", Skins.picker_names(Skins.launcher_skins),
+		func() -> int: return Skins.launcher_index,
+		func(i: int) -> void: Skins.set_launcher(i)))
+	# Method connections: they disconnect themselves when this panel is freed.
 	Skins.changed.connect(_show_selected_background)
+	Skins.changed.connect(_show_selected_block)
 
 func _ready() -> void:
 	_show_selected_background()
+	_show_selected_block()
+
+## `i` = hovered block chip, -1 = the mouse left it.
+func _on_block_hover(i: int) -> void:
+	if i < 0 or Skins.block_skins[i].is_locked():
+		_show_selected_block()
+	else:
+		_block_preview.show_skin(Skins.block_skins[i])
+
+func _show_selected_block() -> void:
+	_block_preview.show_skin(Skins.block())
 
 ## `i` = hovered chip, -1 = the mouse left it (show the selection again).
 ## Locked backgrounds stay hidden, like their ??? chips.
@@ -50,12 +71,6 @@ func _on_background_hover(i: int) -> void:
 
 func _show_selected_background() -> void:
 	background_hovered.emit(Skins.background())
-	add_child(_category(_block_swatch(), "Block", Skins.picker_names(Skins.block_skins),
-		func() -> int: return Skins.block_index,
-		func(i: int) -> void: Skins.set_block(i)))
-	add_child(_category(_launcher_swatch(), "Launcher", Skins.picker_names(Skins.launcher_skins),
-		func() -> int: return Skins.launcher_index,
-		func(i: int) -> void: Skins.set_launcher(i)))
 
 ## Swatch + title, then a chip per option (radio-style via ButtonGroup).
 ## `on_hover(i)` (optional) hears chip i entered, -1 when the mouse leaves one.

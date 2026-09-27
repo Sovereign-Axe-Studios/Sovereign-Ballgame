@@ -1033,4 +1033,11 @@ scaled-down background viewport, pulled out of `SkinPreview`.
 - The Asset Viewer builds its panel with `SkinsPanel.new(false)` and routes
   `background_hovered` into its big `SkinPreview`, so its reaction buttons
   follow the hovered background too.
+- `BackgroundPreview` gives its SubViewport its own `World2D`. By default a
+  SubViewport shares its parent's World2D, which holds the 2D canvas, so the
+  preview drew the game's blocks and balls, and its background node leaked
+  into the game.
+- Blocks get a `BlockRampPreview` beside their chips: a 3x4 wall of bricks
+  valued 1..100, coloured with `Palette.ramp_color(ramp, value)`. It follows
+  hover the same way.
 
