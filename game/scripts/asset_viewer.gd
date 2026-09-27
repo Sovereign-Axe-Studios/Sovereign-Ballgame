@@ -56,8 +56,12 @@ func _build_ui() -> void:
 	root.add_child(tabs)
 
 	tabs.add_child(_tab("Skins", func(col: VBoxContainer) -> void:
-		col.add_child(SkinPreview.new())
-		col.add_child(SkinsPanel.new())))
+		var preview := SkinPreview.new()
+		col.add_child(preview)
+		# The big preview above follows hover, so no second inline one.
+		var panel := SkinsPanel.new(false)
+		panel.background_hovered.connect(preview.show_background)
+		col.add_child(panel)))
 	tabs.add_child(_tab("Modes", _build_modes_tab))
 	tabs.add_child(_tab("Audio", _build_audio_tab))
 

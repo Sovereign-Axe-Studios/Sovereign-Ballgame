@@ -1022,3 +1022,15 @@ direction.
 - Bounce Pierce balls burn out mid-air, and the shooter slides to wherever
   the first one died.
 
+### Background hover preview (after wave 2)
+`BackgroundPreview` (`scripts/ui/background_preview.gd`) is the live,
+scaled-down background viewport, pulled out of `SkinPreview`.
+
+- `SkinsPanel` puts one beside its Background chips, so the pause menu and
+  the title's Skins overlay get it. It shows the chip under the mouse, and
+  falls back to the selected background when the mouse leaves. Locked
+  backgrounds stay hidden.
+- The Asset Viewer builds its panel with `SkinsPanel.new(false)` and routes
+  `background_hovered` into its big `SkinPreview`, so its reaction buttons
+  follow the hovered background too.
+

@@ -1,9 +1,10 @@
 class_name SkinPreview
 extends VBoxContainer
 ## The Asset Viewer's live look at the current skins: the ball look rolling
-## back and forth across a strip, and the real background node running in a
-## scaled-down viewport, with buttons that fire its board-cleared / new-ball
-## reactions. Rebuilds the background when the skin changes.
+## back and forth across a strip, and a BackgroundPreview with buttons that
+## fire its board-cleared / new-ball reactions. It shows whichever background
+## `show_background` was last given -- the Asset Viewer feeds it SkinsPanel's
+## hover, so the big preview follows the mouse over the chips.
 
 ## The background renders at full screen size and is shown scaled.
 const BG_SCALE := 0.42
@@ -12,10 +13,7 @@ const BALL_RADIUS := 44.0
 
 var _strip: Control
 var _t: float = 0.0
-var _bg_holder: Control
-var _viewport: SubViewport
-var _bg: AnimatedBackground
-var _flat: ColorRect
+var _bg_preview: BackgroundPreview
 var _clear_btn: Button
 var _new_btn: Button
 
@@ -31,62 +29,37 @@ func _init() -> void:
 	add_child(_strip)
 
 	add_child(NeonUI.subheader("Background"))
-	_bg_holder = Control.new()
-	_bg_holder.custom_minimum_size = view * BG_SCALE
-	_bg_holder.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_bg_holder.clip_contents = true
-	add_child(_bg_holder)
-
-	var container := SubViewportContainer.new()
-	container.size = view
-	container.scale = Vector2.ONE * BG_SCALE
-	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_bg_holder.add_child(container)
-	_viewport = SubViewport.new()
-	_viewport.size = Vector2i(view)
-	container.add_child(_viewport)
-	_flat = ColorRect.new()
-	_flat.size = view
-	_viewport.add_child(_flat)
+	_bg_preview = BackgroundPreview.new(BG_SCALE)
+	add_child(_bg_preview)
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 20)
 	_clear_btn = NeonUI.button("BOARD CLEARED")
 	_clear_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_clear_btn.pressed.connect(func() -> void:
-		if is_instance_valid(_bg):
-			_bg.on_board_cleared(view * 0.5))
+		var bg := _bg_preview.current()
+		if bg != null:
+			bg.on_board_cleared(view * 0.5))
 	row.add_child(_clear_btn)
 	_new_btn = NeonUI.button("NEW BALL")
 	_new_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_new_btn.pressed.connect(func() -> void:
-		if is_instance_valid(_bg):
-			_bg.on_new_ball(Vector2(randf_range(0.15, 0.85) * view.x, randf_range(0.3, 0.9) * view.y)))
+		var bg := _bg_preview.current()
+		if bg != null:
+			bg.on_new_ball(Vector2(randf_range(0.15, 0.85) * view.x, randf_range(0.3, 0.9) * view.y)))
 	row.add_child(_new_btn)
 	add_child(row)
 
-	# A method connection disconnects itself when this node is freed.
-	Skins.changed.connect(_sync)
-
 func _ready() -> void:
-	_sync()
+	show_background(Skins.background())
 
 func _process(delta: float) -> void:
 	_t += delta
 	_strip.queue_redraw()
 
-func _sync() -> void:
-	var skin := Skins.background()
-	_flat.color = skin.color
-	if is_instance_valid(_bg) and _bg.get_script() == skin.scene:
-		return
-	if is_instance_valid(_bg):
-		_bg.queue_free()
-		_bg = null
-	if skin.scene != null:
-		_bg = skin.scene.new() as AnimatedBackground
-		_viewport.add_child(_bg)
-		_bg.show_behind_parent = false
+## Show `skin` (hovered or selected); the reaction buttons follow it.
+func show_background(skin: Skins.BackgroundSkin) -> void:
+	_bg_preview.show_skin(skin)
 	var reacts := skin.scene != null
 	for b in [_clear_btn, _new_btn]:
 		b.disabled = not reacts
