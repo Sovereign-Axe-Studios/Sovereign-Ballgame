@@ -191,6 +191,22 @@ func on_firing_tick(game: Game, seconds: float) -> void:
 func damage_for(ball: Ball) -> int:
 	return _slot(GameMod.Category.BALL_COLLISION).damage_for(self, ball)
 
+func shot_direction(aim: Vector2, shot_index: int) -> Vector2:
+	return _slot(GameMod.Category.SHOT_SPREAD).shot_direction(self, aim, shot_index)
+
+## End-of-round field step; true = lost.
+func advance_field(grid: GridManager, round_number: int) -> bool:
+	return _slot(GameMod.Category.SPAWN_DIRECTION).advance_field(self, grid, round_number)
+
+func choose_columns(width: int, count: int, round_number: int) -> Array[int]:
+	return _slot(GameMod.Category.DENSITY).choose_columns(self, width, count, round_number)
+
+func on_block_hit(ball: Ball, block: Block) -> void:
+	_slot(GameMod.Category.BALL_COLLISION).on_block_hit(self, ball, block)
+
+func configure_ball(ball: Ball) -> void:
+	_slot(GameMod.Category.WALL).configure_ball(self, ball)
+
 ## After each Ball physics frame's movement.
 func on_ball_moved(ball: Ball) -> void:
 	_slot(GameMod.Category.WALL).on_ball_moved(self, ball)

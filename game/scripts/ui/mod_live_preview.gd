@@ -35,6 +35,7 @@ var _shot_cd: float = 0.0
 var _to_fire: int = 0
 var _aim_index: int = 0
 var _refills: int = 0
+var _shot_index: int = 0
 var _field := Playfield.new()
 
 var _mod: GameMod
@@ -140,7 +141,8 @@ func _fire() -> void:
 	var ball: Ball = BallScene.instantiate()
 	_balls_root.add_child(ball)
 	var aim := Vector2.UP.rotated(deg_to_rad(AIM_SCRIPT[_aim_index]))
-	ball.launch(_rules, _origin, _rules.spread_direction(aim))
+	ball.launch(_rules, _origin, _rules.shot_direction(aim, _shot_index))
+	_shot_index += 1
 	ball.finished.connect(func(b: Ball) -> void: b.queue_free())
 
 func _refill() -> void:

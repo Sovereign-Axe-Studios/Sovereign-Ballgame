@@ -85,18 +85,35 @@ const FRAGMENT_ROWS_MIN := Juice.FRAGMENT_ROWS_MIN
 # read, in Category order. Deleting a mod file makes its line here fail to
 # parse, and that error is the guard.
 const Spread := preload("res://scripts/mods/shot_spread/spread.gd")
+const Sprinkler := preload("res://scripts/mods/shot_spread/sprinkler.gd")
 const Snowball := preload("res://scripts/mods/ball_collision/snowball.gd")
 const TimeRewind := preload("res://scripts/mods/ball_collision/time_rewind.gd")
+const Poison := preload("res://scripts/mods/ball_collision/poison.gd")
 const WrapAround := preload("res://scripts/mods/wall/wrap_around.gd")
 const Wormholes := preload("res://scripts/mods/wall/wormholes.gd")
+const BouncePierce := preload("res://scripts/mods/wall/bounce_pierce.gd")
 const Reinforcements := preload("res://scripts/mods/spawn_direction/reinforcements.gd")
+const PileUp := preload("res://scripts/mods/spawn_direction/pile_up.gd")
+const Virus := preload("res://scripts/mods/spawn_direction/virus.gd")
 const Circles := preload("res://scripts/mods/shape/circles.gd")
+const Triangles := preload("res://scripts/mods/shape/triangles.gd")
 const Rotated := preload("res://scripts/mods/rotation/rotated.gd")
+const RandomRotation := preload("res://scripts/mods/rotation/random_rotation.gd")
 const Boss := preload("res://scripts/mods/density/boss.gd")
+const Checkers := preload("res://scripts/mods/density/checkers.gd")
 const ModifiedGrid := preload("res://scripts/mods/grid/modified_grid.gd")
+const CompactGrid := preload("res://scripts/mods/grid/compact_grid.gd")
 const Lives := preload("res://scripts/mods/loss/lives.gd")
+const Health := preload("res://scripts/mods/loss/health.gd")
 
 const MODS: Array[GDScript] = [
-	Spread, Snowball, TimeRewind, WrapAround, Wormholes, Reinforcements, Circles, Rotated,
-	Boss, ModifiedGrid, Lives,
+	Spread, Sprinkler,
+	Snowball, TimeRewind, Poison,
+	WrapAround, Wormholes, BouncePierce,
+	Reinforcements, PileUp, Virus,
+	Circles, Triangles,
+	Rotated, RandomRotation,
+	Boss, Checkers,
+	ModifiedGrid, CompactGrid,
+	Lives, Health,
 ]

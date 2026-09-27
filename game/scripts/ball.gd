@@ -12,6 +12,10 @@ var direction := Vector2.UP
 ## Bounces so far (walls and blocks), counted after each contact's damage.
 ## Generic ball state for BALL_COLLISION mods (Snowball today).
 var bounces: int = 0
+## Side-wall bounces only (Bounce Pierce counts these).
+var side_bounces: int = 0
+## Per-ball mod state (Bounce Pierce: blocks already pierced).
+var mod_state: Dictionary = {}
 var _return_tween: Tween
 ## Tint while rewinding (Time Rewind).
 const REWIND_COLOR := Color("#6fb6ff")
@@ -46,6 +50,7 @@ func launch(r: GameRules, from: Vector2, dir: Vector2) -> void:
 	_last_pos = from
 	direction = dir.normalized()
 	_recording = r.wants_path_recording()
+	r.configure_ball(self)
 	if _recording:
 		_path.append(from)
 	var circle := CircleShape2D.new()
@@ -120,11 +125,15 @@ func _physics_process(delta: float) -> void:
 		direction = direction.bounce(normal).normalized()
 
 		if collider is Block:
-			var dealt: int = (collider as Block).hit(rules.damage_for(self))
-			block_damaged.emit(collider, dealt)
+			var block := collider as Block
+			var dealt: int = block.hit(rules.damage_for(self))
+			block_damaged.emit(block, dealt)
+			rules.on_block_hit(self, block)
 		elif is_wall:
 			_apply_corner_jitter(collision.get_position())
 			wall_bounced.emit()
+			if absf(normal.x) > 0.5:
+				side_bounces += 1
 		bounces += 1
 		queue_redraw()
 
@@ -152,6 +161,10 @@ func start_rewind(speed: float) -> void:
 	_rewind_speed = speed
 	_rewind_cursor = float(_path.size() - 1)
 	queue_redraw()
+
+## End this ball now (a mod's rule, e.g. Bounce Pierce's bounce limit).
+func finish() -> void:
+	_finish()
 
 func is_done() -> bool:
 	return _done

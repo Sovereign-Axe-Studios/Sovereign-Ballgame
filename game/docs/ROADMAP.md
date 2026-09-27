@@ -78,7 +78,8 @@
 - [x] One example mod per category: Spread, Snowball, Wrap Around, Circles,
       15° Tilt, Boss, 9x11 Grid, Lives. Spawn direction deferred --
       Reinforcements is listed greyed out
-- [ ] Two mods per category
+- [x] Two mods per category (three for ball collision, wall and spawn
+      direction) -- wave 2, HANDOFF §17
 - [ ] Combine mods across all categories at once
 
 ## Basic port

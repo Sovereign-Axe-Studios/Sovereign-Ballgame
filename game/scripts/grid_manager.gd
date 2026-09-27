@@ -58,7 +58,9 @@ func block_count() -> int:
 ## Fill row 0 for `round_number`. The row spends `row_units()` units, each
 ## worth `unit_value()` (the round number), so every block is a multiple of
 ## the round. Density mods override those hooks rather than this function.
-func spawn_row(round_number: int) -> void:
+func spawn_row(round_number: int, row: int = -1) -> void:
+	if row < 0:
+		row = rules.spawn_row_index
 	var w := rules.grid_width
 	var units := maxi(1, rules.row_units(round_number))
 	var unit_value := maxi(1, rules.unit_value(round_number))
@@ -66,17 +68,17 @@ func spawn_row(round_number: int) -> void:
 	# Occupied columns = width minus the gaps this row leaves open.
 	var count := clampi(w - rules.open_slots(), 1, mini(w - 1, units))
 
+	# A DENSITY mod may pick a different number of columns (Checkers).
+	var columns := rules.choose_columns(w, count, round_number)
+	count = columns.size()
+	if count == 0:
+		return
+
 	# Units that may stack on one cell, raised if the row could not fit otherwise.
 	var cap := rules.max_units_per_cell
 	if cap <= 0:
 		cap = units
 	cap = maxi(cap, ceili(float(units) / float(count)))
-
-	var columns: Array[int] = []
-	for c in range(w):
-		columns.append(c)
-	columns.shuffle()
-	columns.resize(count)
 
 	# One unit each, then scatter the rest a unit at a time so the row comes out
 	# lumpy rather than evenly divided.
@@ -96,11 +98,18 @@ func spawn_row(round_number: int) -> void:
 			open.remove_at(pick)
 
 	for i in range(count):
-		_place_block(stacks[i] * unit_value, columns[i], rules.spawn_row_index)
+		place_block(stacks[i] * unit_value, columns[i], row)
 
-	_maybe_place_pickup()
+	maybe_place_pickup(row)
 
-func _place_block(value: int, col: int, row: int) -> Block:
+## Put a new block at (col, row), or add `value` to the block already there.
+func place_block(value: int, col: int, row: int) -> Block:
+	var existing = cells[row][col]
+	if existing is Block:
+		merge_into(existing as Block, value)
+		return existing
+	if is_instance_valid(existing):
+		existing.queue_free()   # a pickup under a new block just leaves play
 	var block: Block = BlockScene.instantiate()
 	add_child(block)
 	block.position = cell_center(col, row)
@@ -110,10 +119,10 @@ func _place_block(value: int, col: int, row: int) -> Block:
 	cells[row][col] = block
 	return block
 
-func _maybe_place_pickup() -> void:
+## Maybe drop a +1 ball pickup into an empty cell of `row` (pickup_chance).
+func maybe_place_pickup(row: int) -> void:
 	if randf() > rules.pickup_chance:
 		return
-	var row := rules.spawn_row_index
 	var empty: Array[int] = []
 	for col in range(rules.grid_width):
 		if cells[row][col] == null:
@@ -130,6 +139,62 @@ func _maybe_place_pickup() -> void:
 
 
 # ------------------------------------------------------------------ shifting
+
+## Add `value` to `block` (spawning onto it, or a moving block merging in).
+func merge_into(block: Block, value: int) -> void:
+	block.value += value
+	block.start_value = maxi(block.start_value, block.value)
+	block.refresh()
+
+## What's at (col, row): a Block, a BallPickup, or null (also off the grid).
+func occupant(col: int, row: int) -> Node2D:
+	if not in_bounds(col, row):
+		return null
+	var n = cells[row][col]
+	return n if is_instance_valid(n) else null
+
+## Move whatever is at `from` into the EMPTY cell `to`, sliding it there.
+func move_cell(from: Vector2i, to: Vector2i) -> void:
+	var n = cells[from.y][from.x]
+	cells[from.y][from.x] = null
+	if not is_instance_valid(n):
+		return
+	cells[to.y][to.x] = n
+	n.grid_row = to.y
+	if "grid_col" in n:
+		n.grid_col = to.x
+	_slide(n, to.x, to.y)
+
+## A missed pickup on the death row just leaves play (field-step mods call
+## this; the stock advance() does it inline).
+func clear_pickups_on_death_row() -> void:
+	var row := rules.death_row()
+	for col in range(rules.grid_width):
+		var n := occupant(col, row)
+		if n is BallPickup:
+			cells[row][col] = null
+			n.queue_free()
+
+## Every Block at or past the death row.
+func blocks_on_death_row() -> Array[Block]:
+	var out: Array[Block] = []
+	for row in range(maxi(0, rules.death_row()), rules.grid_height):
+		for item in cells[row]:
+			if item is Block:
+				out.append(item as Block)
+	return out
+
+## The one loss check every field step ends with: Debug.invincible destroys
+## the blocks and carries on; otherwise the LOSS mod decides. True = lost.
+func resolve_death_row(reached: Array[Block]) -> bool:
+	if reached.is_empty():
+		return false
+	if Debug.invincible:
+		# Through the normal Block.hit path, so fragments/signals still fire.
+		for block in reached:
+			block.hit(block.value)
+		return false
+	return not rules.on_death_row_reached(reached)
 
 ## Move everything down one row. Returns true if the run is lost: a Block
 ## ended up in the death row and neither Debug.invincible nor the LOSS mod
@@ -163,15 +228,7 @@ func advance() -> bool:
 			if row >= death and n is Block:
 				reached.append(n as Block)
 
-	if reached.is_empty():
-		return false
-	if Debug.invincible:
-		# Debug wins over any mod. Destroy them through the normal Block.hit
-		# path, so the usual destroy fragments/signals still fire.
-		for block in reached:
-			block.hit(block.value)
-		return false
-	return not rules.on_death_row_reached(reached)
+	return resolve_death_row(reached)
 
 ## Debug helper: pull the field back up one row.
 func shift_up() -> void:

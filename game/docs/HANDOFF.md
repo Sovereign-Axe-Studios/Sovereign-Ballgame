@@ -963,3 +963,62 @@ CanvasLayer the anchors hadn't resolved by the first draw.
 - **By eye, still for Theo:** the mouse parallax, the hover feel, the reveal
   pacing, and the per-background reaction timing.
 
+---
+
+## 17. Mods wave 2
+
+Design: `docs/specs/2026-09-26-mods-wave-2-design.md`. There are now 21 mods,
+at least two per category, and three for ball collision, wall and spawn
+direction.
+
+### New
+- **Sprinkler:** fixed -20/0/+20 offsets, cycled.
+- **Poison:** hits deal 0 and add stacks, and blocks take their stacks every
+  round end. The stacks show as a `Block.badge`.
+- **Bounce Pierce:** blocks are taken out of the ball's collision mask, each
+  block is hit once per ball (via `Ball.mod_state`), and the ball burns out
+  at 3 side bounces.
+- **Reinforcements:** now built. Rows alternate moving and merge on contact.
+- **Pile-Up:** Theo's design. The new row pushes each column only down to
+  its first gap; a column with nothing new doesn't move.
+- **Virus:** no shifting. Blocks split half to a neighbour (down weighted),
+  and the total value is conserved.
+- **Triangles:** a `Block.Shape.TRIANGLE`, flipped on a checkerboard.
+- **Random Tilt**
+- **Checkers:** the parity columns only.
+- **5x7 Compact**
+- **Health:** 100 HP, and landing blocks cost their value.
+
+### New seams
+- **New hooks:** `shot_direction` (SHOT_SPREAD, by shot index),
+  `on_block_hit` (BALL_COLLISION), `configure_ball` (WALL), `advance_field`
+  (SPAWN_DIRECTION, replaces the spawn+advance pair in `Game._end_round`),
+  and `choose_columns` (DENSITY).
+- **GridManager:**
+  - `resolve_death_row()` is the one loss path, shared by the stock advance
+    and every spawn-direction mod.
+  - New public helpers: `place_block` (merges onto an existing block),
+    `merge_into`, `occupant`, `move_cell`, `blocks_on_death_row`,
+    `clear_pickups_on_death_row`, `maybe_place_pickup(row)`.
+  - `spawn_row(round, row)`.
+- **Block:** `refresh()`, `badge`, and `set_shape(kind, flipped)`.
+- **Ball:** `finish()`, `side_bounces`, `mod_state`.
+
+### Verified
+- `check_mods`: 21 mods, 0 failures.
+- A headless rule suite: Sprinkler's cycle, Poison ticks and persistence,
+  Pile-Up (Theo's column example exactly), Reinforcements merging and
+  parity, Virus value conservation, Health damage and loss, and Bounce
+  Pierce's once-per-block rule and 3-bounce burnout.
+- Auto-play: every new mod plus two combos, no script errors.
+- Screenshots: Triangles + Checkers, Random Tilt, Poison badges, and the
+  Custom grid.
+
+### Loose ends
+- Poison's round-end damage isn't counted in the HUD's TOTAL (only ball hits
+  are).
+- Balance is untested by hand. On random aim, Poison and Triangles runs
+  ended around rounds 7-8.
+- Bounce Pierce balls burn out mid-air, and the shooter slides to wherever
+  the first one died.
+

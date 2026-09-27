@@ -77,7 +77,34 @@ func on_round_end(_rules: GameRules, _field: Playfield) -> void:
 	pass
 
 
+# ------------------------------------------------------------- SHOT_SPREAD
+
+## Direction for the round's `shot_index`-th ball (0-based), given the aim.
+func shot_direction(rules: GameRules, aim: Vector2, _shot_index: int) -> Vector2:
+	return rules.spread_direction(aim)
+
+
+# --------------------------------------------------------- SPAWN_DIRECTION
+
+## End-of-round field step: bring in the next row and move the field.
+## Return true if the run is lost. Finish through
+## `grid.resolve_death_row(blocks)` so Debug.invincible and the LOSS mod
+## still get their say.
+func advance_field(_rules: GameRules, grid: GridManager, round_number: int) -> bool:
+	grid.spawn_row(round_number + 1)
+	return grid.advance()
+
+
 # ----------------------------------------------------------------- DENSITY
+
+## Which columns this row's `count` blocks go in.
+func choose_columns(_rules: GameRules, width: int, count: int, _round_number: int) -> Array[int]:
+	var columns: Array[int] = []
+	for c in range(width):
+		columns.append(c)
+	columns.shuffle()
+	columns.resize(count)
+	return columns
 
 func row_units(rules: GameRules, round_number: int) -> int:
 	return rules.default_row_units(round_number)
@@ -107,6 +134,10 @@ func on_firing_tick(_rules: GameRules, _game: Game, _seconds: float) -> void:
 func damage_for(rules: GameRules, _ball: Ball) -> int:
 	return rules.ball_damage
 
+## `ball` just hit `block` (after its damage). The block may be dying.
+func on_block_hit(_rules: GameRules, _ball: Ball, _block: Block) -> void:
+	pass
+
 ## Visual size multiplier for `ball` (cosmetic: the collider stays
 ## rules.ball_radius, so a big-looking ball still fits the gaps it did).
 func ball_draw_scale(_rules: GameRules, _ball: Ball) -> float:
@@ -118,6 +149,10 @@ func draw_ball_overlay(_rules: GameRules, _ball: Ball, _radius: float) -> void:
 
 
 # -------------------------------------------------------------------- WALL
+
+## A ball was just launched (collision layers etc.).
+func configure_ball(_rules: GameRules, _ball: Ball) -> void:
+	pass
 
 ## `ball` finished moving for this physics frame (after any bounces).
 func on_ball_moved(_rules: GameRules, _ball: Ball) -> void:

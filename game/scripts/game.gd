@@ -71,6 +71,8 @@ var _animated_bg: AnimatedBackground
 ## Set once the board empties; cleared when blocks exist again, so
 ## board_cleared fires once per clear.
 var _board_was_clear: bool = false
+## Balls launched so far this round (SHOT_SPREAD's shot_index).
+var _shots_fired: int = 0
 ## Seconds since this round's first shot (rules.on_firing_tick).
 var _firing_time: float = 0.0
 
@@ -212,6 +214,7 @@ func _begin_firing() -> void:
 	state = State.FIRING
 	_firing_time = 0.0
 	_to_fire = rules.shots_for_round(ball_count)
+	_shots_fired = 0
 	_fire_cd = 0.0
 	_live_balls = 0
 	_has_landing = false
@@ -266,7 +269,8 @@ func live_balls() -> Array[Ball]:
 func _spawn_ball() -> void:
 	var ball: Ball = BallScene.instantiate()
 	balls_root.add_child(ball)
-	ball.launch(rules, _fire_origin, rules.spread_direction(shooter.aim_direction()))
+	ball.launch(rules, _fire_origin, rules.shot_direction(shooter.aim_direction(), _shots_fired))
+	_shots_fired += 1
 	shooter.flash()
 	ball.finished.connect(_on_ball_finished)
 	ball.block_damaged.connect(_on_block_damaged)
@@ -418,8 +422,9 @@ func _end_round() -> void:
 		# reads as clear again once this settles. round_number only advances
 		# on survival, so a loss is still reported against the round that was
 		# just played.
-		grid.spawn_row(round_number + 1)
-		if grid.advance():
+		# The SPAWN_DIRECTION mod owns this step; the stock one spawns into
+		# row 0 then shifts everything down (see GameMod.advance_field).
+		if rules.advance_field(grid, round_number):
 			_game_over()
 			return
 		round_number += 1
