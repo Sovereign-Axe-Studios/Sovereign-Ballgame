@@ -121,6 +121,57 @@ const _Juice := preload("res://scripts/config/juice.gd")
 var play_left: float = 0.0
 var play_right: float = 0.0
 
+# ------------------------------------------------------------- randomness
+# Gameplay randomness lives here, never on the global RNG. Anything that
+# changes the board draws from `field_rng`; anything that steers a ball draws
+# from `shot_rng`. Cosmetics (fragments, return durations, audio, backgrounds)
+# stay on the global randf() so they can never shift the gameplay streams.
+# Both streams are reseeded from `run_seed` every field step / round, so row
+# N comes out the same however the earlier rounds were played.
+# See docs/specs/2026-09-28-seeded-runs-and-share-codes-design.md.
+
+## Salts that keep the two streams apart for the same step number.
+const _FIELD_SALT := 1
+const _SHOT_SALT := 2
+
+## The run's seed. Random unless whoever builds the rules sets it.
+var run_seed: int = randi()
+var field_rng := RandomNumberGenerator.new()
+var shot_rng := RandomNumberGenerator.new()
+
+## Seeded from the start, so a caller that never reseeds (the ? preview)
+## still draws from a defined stream.
+func _init() -> void:
+	seed_field(0)
+	seed_shots(0)
+
+## Before the field step that brings in row `row_number` (the opening row,
+## then every advance_field).
+func seed_field(row_number: int) -> void:
+	field_rng.seed = derive_seed(run_seed, row_number, _FIELD_SALT)
+
+## Before round `round_number`'s first shot.
+func seed_shots(round_number: int) -> void:
+	shot_rng.seed = derive_seed(run_seed, round_number, _SHOT_SALT)
+
+## A splitmix64-style mix of (seed, index, salt). Hand-rolled rather than
+## hash(), which Godot doesn't promise is stable across engine versions --
+## and a shared code has to spawn the same rows next year.
+static func derive_seed(base: int, index: int, salt: int) -> int:
+	# The splitmix64 constants, written as signed 64-bit ints.
+	var x := base ^ (index * -7046029254386353131) ^ (salt * -4658895280553007687)
+	x = (x ^ (x >> 30)) * -4658895280553007687
+	x = (x ^ (x >> 27)) * -7723592293110705685
+	return x ^ (x >> 31)
+
+## Fisher-Yates with a gameplay stream. Array.shuffle() only uses the global RNG.
+static func shuffle(arr: Array, rng: RandomNumberGenerator) -> void:
+	for i in range(arr.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp = arr[i]
+		arr[i] = arr[j]
+		arr[j] = tmp
+
 # ---------------------------------------------------------------- mod slots
 
 ## Category -> installed GameMod. A category with no entry answers with
@@ -194,8 +245,10 @@ func damage_for(ball: Ball) -> int:
 func shot_direction(aim: Vector2, shot_index: int) -> Vector2:
 	return _slot(GameMod.Category.SHOT_SPREAD).shot_direction(self, aim, shot_index)
 
-## End-of-round field step; true = lost.
+## End-of-round field step; true = lost. Reseeds the field stream for the row
+## it brings in, so every SPAWN_DIRECTION mod gets that for free.
 func advance_field(grid: GridManager, round_number: int) -> bool:
+	seed_field(round_number + 1)
 	return _slot(GameMod.Category.SPAWN_DIRECTION).advance_field(self, grid, round_number)
 
 func choose_columns(width: int, count: int, round_number: int) -> Array[int]:
@@ -243,7 +296,7 @@ func spread_direction(aim: Vector2) -> Vector2:
 	if random_rotate_value_deg == 0.0:
 		return aim
 	var spread := deg_to_rad(random_rotate_value_deg)
-	return aim.rotated(randf_range(-spread, spread))
+	return aim.rotated(shot_rng.randf_range(-spread, spread))
 
 ## Every installed mod's non-empty HUD line.
 func status_lines() -> Array[String]:
@@ -270,7 +323,7 @@ func default_unit_value(round_number: int) -> int:
 func default_open_slots() -> int:
 	var lo := clampi(mini(min_open_slots, max_open_slots), 1, grid_width - 1)
 	var hi := clampi(maxi(min_open_slots, max_open_slots), lo, grid_width - 1)
-	return randi_range(lo, hi)
+	return field_rng.randi_range(lo, hi)
 
 func default_shots_for_round(ball_count: int) -> int:
 	return maxi(1, ball_count)

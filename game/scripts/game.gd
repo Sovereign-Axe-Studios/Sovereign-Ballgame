@@ -145,6 +145,7 @@ func _layout_playfield() -> void:
 ## from the very first frame, not just after the first round ends. Re-run
 ## after a debug grid-size apply too, since that clears the whole board.
 func _prime_board() -> void:
+	rules.seed_field(round_number)
 	grid.spawn_row(round_number)
 	grid.advance()
 
@@ -215,6 +216,7 @@ func _begin_firing() -> void:
 	_firing_time = 0.0
 	_to_fire = rules.shots_for_round(ball_count)
 	_shots_fired = 0
+	rules.seed_shots(round_number)
 	_fire_cd = 0.0
 	_live_balls = 0
 	_has_landing = false

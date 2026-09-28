@@ -19,12 +19,21 @@ func _init() -> void:
 	live_preview = false
 
 func advance_field(rules: GameRules, grid: GridManager, round_number: int) -> bool:
-	_spread(rules, grid)
+	# Roll where the new units land BEFORE spreading: the spread's draws depend
+	# on the board, and the incoming row shouldn't (same seed = same row).
+	var rng := rules.field_rng
 	var units := maxi(1, rules.row_units(round_number + 1))
 	var unit_value := maxi(1, rules.unit_value(round_number + 1))
+	var landings: Array[Vector2i] = []
 	for i in range(units):
-		grid.place_block(unit_value, randi_range(0, rules.grid_width - 1), randi_range(0, SPAWN_ROWS - 1))
-	grid.maybe_place_pickup(randi_range(0, SPAWN_ROWS - 1))
+		landings.append(Vector2i(rng.randi_range(0, rules.grid_width - 1), rng.randi_range(0, SPAWN_ROWS - 1)))
+	var pickup_row := rng.randi_range(0, SPAWN_ROWS - 1)
+	var pickup_roll := grid.roll_pickup()
+
+	_spread(rules, grid)
+	for cell in landings:
+		grid.place_block(unit_value, cell.x, cell.y)
+	grid.place_pickup(pickup_row, pickup_roll)
 	return grid.resolve_death_row(grid.blocks_on_death_row())
 
 func _spread(rules: GameRules, grid: GridManager) -> void:
@@ -40,7 +49,7 @@ func _spread(rules: GameRules, grid: GridManager) -> void:
 	for block in blocks:
 		if not is_instance_valid(block) or block.value < MIN_SPLIT_VALUE:
 			continue
-		var d: Vector2i = dirs[randi_range(0, dirs.size() - 1)]
+		var d: Vector2i = dirs[rules.field_rng.randi_range(0, dirs.size() - 1)]
 		var target := Vector2i(block.grid_col, block.grid_row) + d
 		if not grid.in_bounds(target.x, target.y):
 			continue

@@ -90,17 +90,22 @@ func spawn_row(round_number: int, row: int = -1) -> void:
 	for i in range(count):
 		open.append(i)
 	while remaining > 0 and not open.is_empty():
-		var pick := randi_range(0, open.size() - 1)
+		var pick := rules.field_rng.randi_range(0, open.size() - 1)
 		var idx: int = open[pick]
 		stacks[idx] += 1
 		remaining -= 1
 		if stacks[idx] >= cap:
 			open.remove_at(pick)
 
+	# Rolled BEFORE placing: configure_block may draw from field_rng too
+	# (Random Tilt), and the pickup shouldn't shift with how many blocks got
+	# a fresh cell versus merged into an old one.
+	var pickup_roll := roll_pickup()
+
 	for i in range(count):
 		place_block(stacks[i] * unit_value, columns[i], row)
 
-	maybe_place_pickup(row)
+	place_pickup(row, pickup_roll)
 
 ## Put a new block at (col, row), or add `value` to the block already there.
 func place_block(value: int, col: int, row: int) -> Block:
@@ -121,7 +126,17 @@ func place_block(value: int, col: int, row: int) -> Block:
 
 ## Maybe drop a +1 ball pickup into an empty cell of `row` (pickup_chance).
 func maybe_place_pickup(row: int) -> void:
-	if randf() > rules.pickup_chance:
+	place_pickup(row, roll_pickup())
+
+## The field_rng draws a pickup needs, taken up front: [chance roll, column
+## pick in 0..1]. Always two draws, so the stream stays in step either way.
+func roll_pickup() -> Vector2:
+	return Vector2(rules.field_rng.randf(), rules.field_rng.randf())
+
+## Place a pickup from a roll_pickup() result, if the chance hit and `row`
+## has an empty cell.
+func place_pickup(row: int, roll: Vector2) -> void:
+	if roll.x > rules.pickup_chance:
 		return
 	var empty: Array[int] = []
 	for col in range(rules.grid_width):
@@ -129,7 +144,7 @@ func maybe_place_pickup(row: int) -> void:
 			empty.append(col)
 	if empty.is_empty():
 		return
-	var col: int = empty[randi_range(0, empty.size() - 1)]
+	var col: int = empty[mini(int(roll.y * empty.size()), empty.size() - 1)]
 	var pickup: BallPickup = PickupScene.instantiate()
 	add_child(pickup)
 	pickup.position = cell_center(col, row)

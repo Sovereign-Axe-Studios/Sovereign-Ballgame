@@ -1071,3 +1071,33 @@ Mode Select's list is now a two-column grid of cards (name, the mods' icons
 animating on hover, and the description). Rule: at most one mod per category
 per preset. All 11 were checked for it, and each was auto-played to round 6.
 
+---
+
+## 18. Seeded runs, share codes, the Daily (in progress)
+
+Spec: `docs/specs/2026-09-28-seeded-runs-and-share-codes-design.md`, with
+6 build steps. **Step 1 is done:** gameplay randomness is off the global RNG.
+
+- `GameRules` owns `run_seed` (random for now; step 2 takes it from `Run`),
+  plus `field_rng` and `shot_rng`. `seed_field(row)` runs before the opening
+  row (`Game._prime_board`) and inside `GameRules.advance_field`.
+  `seed_shots(round)` runs in `Game._begin_firing`.
+- Moved onto `field_rng`: the stack scatter and pickups in `spawn_row`,
+  `default_open_slots`, the stock `choose_columns` (now
+  `GameRules.shuffle`), Virus, Wormholes' relocation and Random Tilt.
+  Moved onto `shot_rng`: `spread_direction` and the ball's corner jitter.
+- Pickups are rolled before a row's blocks are placed
+  (`roll_pickup` / `place_pickup`; `maybe_place_pickup` still exists).
+  Virus pre-rolls its landing cells before spreading. Same gameplay, but
+  the incoming row no longer depends on the board.
+- Cosmetic randomness is untouched on the global RNG.
+- `check_seeds` covers 10 mod sets over 30 rounds: the same seed gives the
+  same board despite global-RNG churn; knocking blocks out and burning
+  extra draws leaves the incoming row the same (stock-step mods); and a
+  different seed gives a different board. A mutation test (column shuffle
+  back on the global RNG) fails 9 of the 10 cases, as it should (Checkers
+  doesn't shuffle).
+- Auto-play: all 11 presets plus Random Tilt + Virus, Spread + Wormholes
+  and Reinforcements + Checkers reached round 7 with no script errors.
+
+**Next:** step 2 (`Run.seed`, R keeps the seed, NEW SEED).

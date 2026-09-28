@@ -8,8 +8,8 @@ func _init() -> void:
 	display_name = "Random Tilt"
 	description = "Every block is rotated to its own random angle."
 
-func configure_block(_rules: GameRules, block: Block) -> void:
-	var degrees := randf_range(0.0, MAX_DEGREES)
+func configure_block(rules: GameRules, block: Block) -> void:
+	var degrees := rules.field_rng.randf_range(0.0, MAX_DEGREES)
 	var theta := deg_to_rad(degrees)
 	# Shrink so the rotated square still fits its cell (see rotated.gd).
 	block.set_tilt(degrees, 1.0 / (absf(cos(theta)) + absf(sin(theta))))

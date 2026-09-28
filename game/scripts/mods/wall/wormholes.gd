@@ -72,7 +72,7 @@ func _relocate() -> void:
 		for col in range(_field.rules.grid_width):
 			if grid.cells[row][col] == null:
 				empty.append(Vector2i(col, row))
-	empty.shuffle()
+	GameRules.shuffle(empty, _field.rules.field_rng)
 	if empty.size() < 2:
 		_black = NO_CELL
 		_white = NO_CELL

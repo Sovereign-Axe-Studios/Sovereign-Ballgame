@@ -98,11 +98,11 @@ func advance_field(_rules: GameRules, grid: GridManager, round_number: int) -> b
 # ----------------------------------------------------------------- DENSITY
 
 ## Which columns this row's `count` blocks go in.
-func choose_columns(_rules: GameRules, width: int, count: int, _round_number: int) -> Array[int]:
+func choose_columns(rules: GameRules, width: int, count: int, _round_number: int) -> Array[int]:
 	var columns: Array[int] = []
 	for c in range(width):
 		columns.append(c)
-	columns.shuffle()
+	GameRules.shuffle(columns, rules.field_rng)
 	columns.resize(count)
 	return columns
 

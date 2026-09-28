@@ -200,7 +200,7 @@ func _apply_corner_jitter(point: Vector2) -> void:
 	if nearest > rules.corner_radius:
 		return
 	var strength := 1.0 - (nearest / rules.corner_radius)
-	var jitter := deg_to_rad(randf_range(-1.0, 1.0) * rules.corner_jitter_degrees * strength)
+	var jitter := deg_to_rad(rules.shot_rng.randf_range(-1.0, 1.0) * rules.corner_jitter_degrees * strength)
 	direction = direction.rotated(jitter).normalized()
 
 ## Stop balls settling into a flat horizontal groove they can never leave.
