@@ -2,7 +2,6 @@
 .godot/
 /game/android/
 /game/builds/
-/game/export_presets.cfg
 
 # Godot-specific ignores
 *.translation
