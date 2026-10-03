@@ -30,6 +30,31 @@ func draw(c: CanvasItem, pos: Vector2, r: float, _spin: float, _t: float) -> voi
 	c.draw_circle(pos, r, color)
 	c.draw_circle(pos + Vector2(-r, -r) * 0.3, r * 0.3, highlight)
 
+## `color`, lightened until it reads on a dark board -- for the aim dots and
+## the launcher's ammo count, which a Charcoal or Purple ball would otherwise
+## all but hide. Ball colours are earned cosmetics, so none may cost aim.
+func ui_color() -> Color:
+	var out := color
+	for i in range(8):
+		if out.get_luminance() >= UI_MIN_LUMINANCE:
+			break
+		out = out.lightened(0.2)
+	return out
+
+## Floor for ui_color(). Roughly where a colour clears 7:1 on the background.
+const UI_MIN_LUMINANCE := 0.55
+## The in-play contrast ring: dark inner band (reads on bright blocks),
+## light outer band (reads on the dark board).
+const RING_DARK := Color(0.03, 0.04, 0.06, 0.9)
+const RING_LIGHT := Color(1, 1, 1, 0.6)
+
+## Two-tone ring just outside the ball, drawn for every look in play so a
+## ball stays visible whatever block or background it is over -- a red ball
+## over a red block otherwise vanishes (playtest 10/01 colour pass).
+static func contrast_ring(c: CanvasItem, pos: Vector2, r: float) -> void:
+	c.draw_arc(pos, r + 1.0, 0.0, TAU, 40, RING_DARK, 2.0, true)
+	c.draw_arc(pos, r + 2.75, 0.0, TAU, 40, RING_LIGHT, 1.5, true)
+
 
 # ------------------------------------------------------------------ helpers
 # Canvas drawing has no clip-to-circle, so these build shapes that already

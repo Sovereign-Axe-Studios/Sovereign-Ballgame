@@ -255,4 +255,5 @@ func _draw() -> void:
 		draw_circle(Vector2.ZERO, radius, REWIND_COLOR)
 	else:
 		skin.draw(self, Vector2.ZERO, radius, spin, _age)
+	BallLook.contrast_ring(self, Vector2.ZERO, radius)
 	rules.draw_ball_overlay(self, radius)

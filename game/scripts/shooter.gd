@@ -106,7 +106,7 @@ func _draw_ammo() -> void:
 	var on_right := global_position.x < get_viewport_rect().size.x * 0.5
 	var x := AMMO_OFFSET_X if on_right else -AMMO_OFFSET_X - main_w - extra_w
 	var baseline := AMMO_FONT_SIZE * 0.35
-	var color := Skins.ball().color
+	var color := Skins.ball().ui_color()
 	draw_string(font, Vector2(x, baseline), main, HORIZONTAL_ALIGNMENT_LEFT, -1, AMMO_FONT_SIZE, color)
 	draw_string(font, Vector2(x + main_w, baseline), extra, HORIZONTAL_ALIGNMENT_LEFT, -1, AMMO_FONT_SIZE,
 		PENDING_AMMO_COLOR)
@@ -148,7 +148,7 @@ func _draw_ball_launcher() -> void:
 	draw_circle(Vector2.ZERO, 22.0, base if active else base.darkened(0.5))
 	draw_arc(Vector2.ZERO, 30.0, 0.0, TAU, 32, Palette.WALL.lightened(0.3), 3.0, true)
 	if active:
-		_draw_aim_dots(aim_direction(), base)
+		_draw_aim_dots(aim_direction(), Skins.ball().ui_color())
 
 ## The dotted aim line every non-probe launcher shares. It starts two dots
 ## out, which clears both the ball launcher's ring and the cannon's barrel tip.
@@ -183,4 +183,4 @@ func _draw_cannon() -> void:
 	draw_circle(tip, half_w * 0.85, Color(accent.r, accent.g, accent.b, dim))
 	# Playtest 10/01: with no line, players couldn't tell where it was aimed.
 	if active:
-		_draw_aim_dots(dir, accent)
+		_draw_aim_dots(dir, Skins.ball().ui_color())

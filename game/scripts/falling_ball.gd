@@ -34,3 +34,4 @@ func _process(delta: float) -> void:
 
 func _draw() -> void:
 	Skins.ball().draw(self, Vector2.ZERO, _radius, position.y / _radius, 0.0)
+	BallLook.contrast_ring(self, Vector2.ZERO, _radius)
