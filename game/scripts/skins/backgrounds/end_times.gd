@@ -1,7 +1,7 @@
 class_name EndTimesBackground
 extends AnimatedBackground
 ## The End Times background skin: a starfield living through the end of the
-## universe on a loop. Stars blink out one by one, some going supernova on
+## universe on a loop. Stars blink out one by one, each going supernova on
 ## the way; once the last one is gone there's a big-bang flash from the
 ## centre, a fresh set streams outward and settles, and it starts over.
 ##
@@ -9,23 +9,29 @@ extends AnimatedBackground
 ## supernova. Unlocked by the title-screen constellation.
 
 const STAR_COUNT := 80
-## One full cycle: death, darkness, big bang, new stars settling.
-const CYCLE_SECONDS := 60.0
-## Share of stars that go supernova before dying.
-const SUPERNOVA_CHANCE := 1.0 / 6.0
+## Share of stars that go supernova before dying: all of them.
+const SUPERNOVA_CHANCE := 1.0
 const BG_COLOR := Color("#06080c")
 const STAR_COLOR := Color("#e8eefc")
 const NOVA_COLOR := Color("#ffd27a")
 
-# Cycle phases, as fractions of CYCLE_SECONDS.
-const DEATHS_START := 0.05
-const DEATHS_END := 0.8
-const BANG_AT := 0.86
-const BANG_LENGTH := 0.04
-const SETTLE_START := 0.88
-## A supernova flares for this share of the cycle before its star dies, and
-## its ring spreads for the same again after.
-const NOVA_LENGTH := 0.03
+# Cycle phases, in seconds from the start of a cycle. Seconds, not fractions
+# of the cycle: the deaths are the slow part, and stretching the cycle must
+# not slow the flares and the bang down with it.
+## The big bang: 22 minutes in. Every star has burst before it.
+const BANG_AT := 1320.0
+const DEATHS_START := 3.0
+## A beat of total darkness between the last star and the bang.
+const DEATHS_END := BANG_AT - 3.6
+## The bang's flash spreads for twice this.
+const BANG_LENGTH := 2.4
+const SETTLE_START := BANG_AT + 1.2
+const SETTLE_LENGTH := 7.2
+## One full cycle: deaths, darkness, big bang, new stars settling.
+const CYCLE_SECONDS := SETTLE_START + SETTLE_LENGTH
+## A supernova flares for this long before its star dies, and its ring
+## spreads for the same again after.
+const NOVA_LENGTH := 1.8
 
 var _cycle: int = -1
 var _rest := PackedVector2Array()      ## where this cycle's stars sit
@@ -47,11 +53,11 @@ func _process(delta: float) -> void:
 
 ## Skip straight to this cycle's big bang.
 func on_board_cleared(_pos: Vector2) -> void:
-	t = float(_cycle) * CYCLE_SECONDS + BANG_AT * CYCLE_SECONDS
+	t = float(_cycle) * CYCLE_SECONDS + BANG_AT
 
 ## The nearest star still alive goes supernova right now.
 func on_new_ball(pos: Vector2) -> void:
-	var p := fposmod(t, CYCLE_SECONDS) / CYCLE_SECONDS
+	var p := fposmod(t, CYCLE_SECONDS)
 	if p >= DEATHS_END:
 		return
 	var best := -1
@@ -84,7 +90,7 @@ func _random_positions() -> PackedVector2Array:
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, view), BG_COLOR, true)
-	var p := fposmod(t, CYCLE_SECONDS) / CYCLE_SECONDS
+	var p := fposmod(t, CYCLE_SECONDS)
 	var center := view * 0.5
 
 	if p < SETTLE_START:
@@ -92,7 +98,7 @@ func _draw() -> void:
 			_draw_dying_star(i, p)
 	else:
 		# New stars streaming out from the centre and easing into place.
-		var f := ease((p - SETTLE_START) / (1.0 - SETTLE_START), 0.3)
+		var f := ease(clampf((p - SETTLE_START) / SETTLE_LENGTH, 0.0, 1.0), 0.3)
 		for i in range(STAR_COUNT):
 			var pos := center.lerp(_next_rest[i], f)
 			draw_circle(pos, _size[i], Color(STAR_COLOR, 0.3 + 0.6 * f))
