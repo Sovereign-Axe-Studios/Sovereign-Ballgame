@@ -7,11 +7,16 @@ extends Node
 ## row-shift credit, the "expected" shadow counters, the overlay's own
 ## touch-shift toggle) belongs to the current run instead and resets with it
 ## -- see `Game` and `scripts/ui/debug_overlay.gd`.
+##
+## Both flags stay false outside a Debug build (see Build.shows_debug_panel):
+## the setters drop any attempt to turn them on, so hiding the menu isn't the
+## only thing standing between a release player and the debug tools.
 
 signal enabled_changed(value: bool)
 
 var enabled: bool = false:
 	set(value):
+		value = value and Build.shows_debug_panel()
 		if enabled == value:
 			return
 		enabled = value
@@ -22,4 +27,6 @@ var enabled: bool = false:
 ## deep into a run without actually dying. Independent of `enabled`: it's a
 ## debug-menu toggle either way, but doesn't need the full debug feature set
 ## switched on to make sense on its own.
-var invincible: bool = false
+var invincible: bool = false:
+	set(value):
+		invincible = value and Build.shows_debug_panel()

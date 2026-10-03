@@ -154,7 +154,10 @@ func _build_root_page(col: VBoxContainer) -> void:
 	col.add_child(_nav_button("MODS", func() -> Control: return _mods_page))
 	col.add_child(_nav_button("SETTINGS", func() -> Control: return _settings_page))
 	col.add_child(_nav_button("SKINS", func() -> Control: return _skins_page))
-	col.add_child(_nav_button("DEBUG MENU", func() -> Control: return _debug_page))
+	# The page is built regardless (_sync_fields fills it); only the way in
+	# is gated.
+	if Build.shows_debug_panel():
+		col.add_child(_nav_button("DEBUG MENU", func() -> Control: return _debug_page))
 
 	var menu_btn := NeonUI.button("MAIN MENU")
 	menu_btn.pressed.connect(func() -> void:
