@@ -5,6 +5,13 @@ extends GameMod
 ## half to a random neighbour (down weighted higher), where an existing block
 ## absorbs it. Total value is conserved; you lose when it spreads onto the
 ## death row.
+##
+## The field never shifts, so the usual rules would starve the player of
+## balls: the spawn rows fill with blocks and leave no room for a pickup, and
+## a pickup that did land would be buried by the next landing. So Virus never
+## places a block on a pickup (a landing there fizzles; a split there doesn't
+## happen), and if the rolled row is full the round's pickup goes in the
+## topmost row above the death row that has an empty cell.
 
 const MIN_SPLIT_VALUE := 2
 ## Relative odds of splitting down vs left / right.
@@ -32,8 +39,11 @@ func advance_field(rules: GameRules, grid: GridManager, round_number: int) -> bo
 
 	_spread(rules, grid)
 	for cell in landings:
-		grid.place_block(unit_value, cell.x, cell.y)
-	grid.place_pickup(pickup_row, pickup_roll)
+		if not grid.occupant(cell.x, cell.y) is BallPickup:
+			grid.place_block(unit_value, cell.x, cell.y)
+	var row := _pickup_row(rules, grid, pickup_row)
+	if row >= 0:
+		grid.place_pickup(row, pickup_roll)
 	return grid.resolve_death_row(grid.blocks_on_death_row())
 
 func _spread(rules: GameRules, grid: GridManager) -> void:
@@ -51,12 +61,26 @@ func _spread(rules: GameRules, grid: GridManager) -> void:
 			continue
 		var d: Vector2i = dirs[rules.field_rng.randi_range(0, dirs.size() - 1)]
 		var target := Vector2i(block.grid_col, block.grid_row) + d
-		if not grid.in_bounds(target.x, target.y):
+		if not grid.in_bounds(target.x, target.y) or grid.occupant(target.x, target.y) is BallPickup:
 			continue
 		var half := block.value / 2
 		block.value -= half
 		block.refresh()
 		grid.place_block(half, target.x, target.y)
+
+## The rolled spawn row if it has an empty cell, else the topmost row that has
+## one. Never the death row.
+## -1 if the whole field above the death row is full.
+func _pickup_row(rules: GameRules, grid: GridManager, rolled: int) -> int:
+	var rows: Array[int] = [rolled]
+	for row in range(rules.death_row()):
+		if row != rolled:
+			rows.append(row)
+	for row in rows:
+		for col in range(rules.grid_width):
+			if grid.occupant(col, row) == null:
+				return row
+	return -1
 
 ## A block splitting in two, the child creeping downward.
 func draw_preview(c: CanvasItem, r: Rect2, t: float) -> void:
