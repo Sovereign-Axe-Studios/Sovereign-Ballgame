@@ -54,6 +54,9 @@ var _fire_cd: float = 0.0
 var _live_balls: int = 0
 var _landing_x: float = 0.0
 var _has_landing: bool = false
+## The first ball has landed but the shooter hasn't slid there yet -- it waits
+## until the last ball of the round has left (see _slide_if_ready).
+var _slide_pending: bool = false
 var _fire_origin := Vector2.ZERO
 var _play_left: float = 0.0
 var _play_right: float = 0.0
@@ -220,6 +223,7 @@ func _begin_firing() -> void:
 	_fire_cd = 0.0
 	_live_balls = 0
 	_has_landing = false
+	_slide_pending = false
 	_line_up_count = 0
 	round_damage = 0
 	_fire_origin = shooter.global_position
@@ -238,6 +242,8 @@ func _tick_firing(delta: float) -> void:
 		_spawn_ball()
 		_to_fire -= 1
 		_fire_cd += interval
+	shooter.ammo = _to_fire
+	_slide_if_ready()
 
 ## An animated background skin is a node drawn behind this one, not a flat
 ## fill in _draw. Swap it to match the current skin.
@@ -257,6 +263,8 @@ func _sync_animated_background() -> void:
 ## normal way, once every ball already out has finished.
 func stop_firing() -> void:
 	_to_fire = 0
+	shooter.ammo = 0
+	_slide_if_ready()
 	if _live_balls <= 0 and state == State.FIRING:
 		_end_round()
 
@@ -290,10 +298,10 @@ func _on_ball_finished(ball: Ball) -> void:
 			_play_left + rules.ball_radius,
 			_play_right - rules.ball_radius
 		)
-		# The shooter follows the FIRST ball home immediately, not at the end
-		# of the round -- the original waited for every ball to land first.
-		if rules.balls_return_to_lander:
-			shooter.slide_to_x(_landing_x, SHOOTER_SLIDE_DURATION)
+		# The shooter follows the FIRST ball home, not at the end of the
+		# round -- the original waited for every ball to land first.
+		_slide_pending = rules.balls_return_to_lander
+		_slide_if_ready()
 
 	match Skins.return_mode:
 		Skins.ReturnMode.MOVE_TO_SHOOTER:
@@ -310,6 +318,15 @@ func _on_ball_finished(ball: Ball) -> void:
 
 	if _to_fire <= 0 and _live_balls <= 0:
 		_end_round()
+
+## Slides the shooter to the first landing once nothing is left to fire.
+## Sliding while balls were still leaving the old spot made the stream look
+## detached from the launcher (playtest 10/01: "where I aim vs. where it
+## comes out").
+func _slide_if_ready() -> void:
+	if _slide_pending and _to_fire <= 0:
+		_slide_pending = false
+		shooter.slide_to_x(_landing_x, SHOOTER_SLIDE_DURATION)
 
 ## Where a gathering ball is headed: the shooter's X if balls_return_to_lander
 ## is off or nothing has landed yet, otherwise the shared landing spot.
@@ -452,6 +469,7 @@ func _game_over() -> void:
 	print("DEBUG: lose game -- a block reached row %d on round %d (total damage %d)"
 		% [rules.death_row(), round_number, total_damage])
 	hud.show_game_over(round_number, total_damage)
+	_refresh_hud()
 
 ## True when any block has crept to within DANGER_ROWS of the death row.
 func _blocks_near_death() -> bool:
@@ -464,6 +482,14 @@ func _blocks_near_death() -> bool:
 
 func _refresh_hud() -> void:
 	hud.refresh(round_number, ball_count, pending_balls, round_damage, total_damage, rules.status_lines())
+	match state:
+		State.AIMING:
+			shooter.ammo = rules.shots_for_round(ball_count)
+		State.FIRING:
+			shooter.ammo = _to_fire
+		_:
+			shooter.ammo = 0
+	shooter.pending_ammo = pending_balls if state != State.GAME_OVER else 0
 	debug_overlay.refresh_readouts()
 
 

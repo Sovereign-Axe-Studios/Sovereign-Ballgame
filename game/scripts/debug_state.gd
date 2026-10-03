@@ -30,3 +30,41 @@ var enabled: bool = false:
 var invincible: bool = false:
 	set(value):
 		invincible = value and Build.shows_debug_panel()
+
+## When true, the whole screen renders in grayscale (luminance only) -- the
+## colour-blind / value check from playtest 10/01. Two colours that look the
+## same here can only be told apart by hue. Session-only like the rest.
+var grayscale: bool = false:
+	set(value):
+		grayscale = value and Build.shows_debug_panel()
+		if grayscale and _grayscale_layer == null:
+			_grayscale_layer = _make_grayscale_layer()
+			add_child(_grayscale_layer)
+		if _grayscale_layer != null:
+			_grayscale_layer.visible = grayscale
+
+## Above every game and menu layer, so it filters the whole frame.
+const GRAYSCALE_LAYER := 128
+const GRAYSCALE_SHADER := """
+shader_type canvas_item;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
+void fragment() {
+	vec3 c = texture(screen_tex, SCREEN_UV).rgb;
+	COLOR = vec4(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), 1.0);
+}
+"""
+
+var _grayscale_layer: CanvasLayer
+
+func _make_grayscale_layer() -> CanvasLayer:
+	var layer := CanvasLayer.new()
+	layer.layer = GRAYSCALE_LAYER
+	var rect := ColorRect.new()
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	mat.shader = Shader.new()
+	mat.shader.code = GRAYSCALE_SHADER
+	rect.material = mat
+	layer.add_child(rect)
+	return layer

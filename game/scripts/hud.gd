@@ -34,8 +34,8 @@ func refresh(round_number: int, balls: int, pending: int, round_damage: int, tot
 	_status.text = "   ".join(status_lines)
 	_round.text = "ROUND %d" % round_number
 	_balls.text = "BALLS %d" % balls + ("  (+%d)" % pending if pending > 0 else "")
-	_round_damage.text = "THIS SHOT  %d" % round_damage
-	_total_damage.text = "TOTAL  %d" % total_damage
+	_round_damage.text = "ROUND DMG  %d" % round_damage
+	_total_damage.text = "TOTAL DMG  %d" % total_damage
 
 func show_game_over(round_number: int, total_damage: int) -> void:
 	_game_over.text = "GAME OVER\nround %d  ·  %d damage\n\npress R to restart" % [round_number, total_damage]

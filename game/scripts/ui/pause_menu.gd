@@ -27,6 +27,7 @@ var _mode_label: Label
 var _debug_toggle: Button
 var _debug_explainer: Label
 var _invincible_toggle: Button
+var _grayscale_toggle: Button
 var _width_box: SpinBox
 var _height_box: SpinBox
 var _kill_box: SpinBox
@@ -88,6 +89,7 @@ func _sync_fields() -> void:
 	_debug_toggle.set_pressed_no_signal(Debug.enabled)
 	_debug_explainer.visible = Debug.enabled
 	_invincible_toggle.set_pressed_no_signal(Debug.invincible)
+	_grayscale_toggle.set_pressed_no_signal(Debug.grayscale)
 	_width_box.value = _game.rules.grid_width
 	_height_box.value = _game.rules.grid_height
 	_kill_box.value = _game.rules.death_row()
@@ -200,6 +202,10 @@ func _build_debug_page(col: VBoxContainer) -> void:
 	_invincible_toggle = NeonUI.toggle("INVINCIBLE (AUTO-CLEAR A LETHAL ROW)")
 	_invincible_toggle.toggled.connect(func(pressed: bool) -> void: Debug.invincible = pressed)
 	col.add_child(_invincible_toggle)
+
+	_grayscale_toggle = NeonUI.toggle("GRAYSCALE (COLOUR-BLIND VALUE CHECK)")
+	_grayscale_toggle.toggled.connect(func(pressed: bool) -> void: Debug.grayscale = pressed)
+	col.add_child(_grayscale_toggle)
 
 	# Unlocks are persisted progress (the Unlocks autoload), so these write
 	# user://unlocks.cfg. Pickers already built refresh on the next scene load.

@@ -5,6 +5,24 @@ extends Node2D
 var rules: GameRules
 var aim_degrees: float = 0.0
 var active: bool = true
+## Shots left to fire this round, drawn as "×N" beside the launcher so the
+## ball count reads as ammo (playtest 10/01). 0 hides it.
+var ammo: int = 0:
+	set(v):
+		if v != ammo:
+			ammo = v
+			queue_redraw()
+## +1 pickups caught this round, not yet added to `ammo`. Shown as "+N".
+var pending_ammo: int = 0:
+	set(v):
+		if v != pending_ammo:
+			pending_ammo = v
+			queue_redraw()
+
+const AMMO_FONT_SIZE := 34
+## Gap from the launcher's centre to the near edge of the "×N" text.
+const AMMO_OFFSET_X := 44.0
+const PENDING_AMMO_COLOR := Color("#7dff6a")
 
 func _ready() -> void:
 	Skins.changed.connect(queue_redraw)
@@ -73,6 +91,25 @@ func _draw() -> void:
 			draw_probe_cannon(self, Vector2.ZERO, dir, 1.0, _flash / FLASH_SECONDS, active)
 		_:
 			_draw_ball_launcher()
+	_draw_ammo()
+
+## "×N  +P" beside the launcher, on whichever side has more room -- at a wall
+## the far side would run off the board.
+func _draw_ammo() -> void:
+	if ammo <= 0 and pending_ammo <= 0:
+		return
+	var font := ThemeDB.fallback_font
+	var main := "×%d" % ammo if ammo > 0 else ""
+	var extra := ("  +%d" if main != "" else "+%d") % pending_ammo if pending_ammo > 0 else ""
+	var main_w := font.get_string_size(main, HORIZONTAL_ALIGNMENT_LEFT, -1, AMMO_FONT_SIZE).x
+	var extra_w := font.get_string_size(extra, HORIZONTAL_ALIGNMENT_LEFT, -1, AMMO_FONT_SIZE).x
+	var on_right := global_position.x < get_viewport_rect().size.x * 0.5
+	var x := AMMO_OFFSET_X if on_right else -AMMO_OFFSET_X - main_w - extra_w
+	var baseline := AMMO_FONT_SIZE * 0.35
+	var color := Skins.ball().color
+	draw_string(font, Vector2(x, baseline), main, HORIZONTAL_ALIGNMENT_LEFT, -1, AMMO_FONT_SIZE, color)
+	draw_string(font, Vector2(x + main_w, baseline), extra, HORIZONTAL_ALIGNMENT_LEFT, -1, AMMO_FONT_SIZE,
+		PENDING_AMMO_COLOR)
 
 ## The Orbital Probe Cannon: a long segmented barrel with three ring bands
 ## and a glowing muzzle, on a heavy base. Static so the skin swatches can
@@ -110,12 +147,15 @@ func _draw_ball_launcher() -> void:
 	var base := Skins.ball().color
 	draw_circle(Vector2.ZERO, 22.0, base if active else base.darkened(0.5))
 	draw_arc(Vector2.ZERO, 30.0, 0.0, TAU, 32, Palette.WALL.lightened(0.3), 3.0, true)
-	if not active:
-		return
-	var dir := aim_direction()
+	if active:
+		_draw_aim_dots(aim_direction(), base)
+
+## The dotted aim line every non-probe launcher shares. It starts two dots
+## out, which clears both the ball launcher's ring and the cannon's barrel tip.
+func _draw_aim_dots(dir: Vector2, color: Color) -> void:
 	for i in range(2, 20):
 		var alpha := clampf(0.85 - float(i) * 0.04, 0.05, 0.85)
-		draw_circle(dir * (float(i) * 36.0), 5.0, Color(base.r, base.g, base.b, alpha))
+		draw_circle(dir * (float(i) * 36.0), 5.0, Color(color.r, color.g, color.b, alpha))
 
 ## A simple vector cannon -- deliberately plain, mostly to prove the launcher
 ## itself can be a skin category and not just the ball's colour. A base
@@ -141,3 +181,6 @@ func _draw_cannon() -> void:
 	draw_colored_polygon(points, metal)
 	draw_polyline(PackedVector2Array([p1, p1 + tip, p2 + tip, p2, p1]), metal_dark, 2.0, true)
 	draw_circle(tip, half_w * 0.85, Color(accent.r, accent.g, accent.b, dim))
+	# Playtest 10/01: with no line, players couldn't tell where it was aimed.
+	if active:
+		_draw_aim_dots(dir, accent)
